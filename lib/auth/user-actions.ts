@@ -4,11 +4,12 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { ROLES, canManageUser, rolesActorCanAssign } from "@/lib/auth/permissions";
+import { ROLES, canChangeRole, canManageUser, canResetPassword, canSetStorageLimit, canViewUsage, rolesActorCanAssign } from "@/lib/auth/permissions";
 import { addUserSchema, type UserActionState } from "@/lib/auth/schemas";
-import { ROLE_LABELS, getCurrentUser, type CurrentUser } from "@/lib/auth/session";
+import { ROLE_LABELS, getCurrentUser, isAdminRole, type CurrentUser } from "@/lib/auth/session";
 import { generateTempPassword } from "@/lib/auth/temp-password";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /*
  * User management. Every action re-reads the caller's session and checks
@@ -48,11 +49,16 @@ async function audit(
   if (error) console.error(`audit_log insert failed for ${action}: ${error.message}`);
 }
 
+type Capability = "lifecycle" | "role" | "password" | "storageLimit";
+const CAN = { lifecycle: canManageUser, role: canChangeRole, password: canResetPassword, storageLimit: canSetStorageLimit } as const;
+const DENIED = { ok: false, error: "You don't have permission to do that." } as const;
+
 /** Resolves the target of a manage action, or explains why the caller can't. */
-async function authorizeManage(userId: unknown) {
+async function authorizeManage(userId: unknown, capability: Capability) {
   const actor = await currentActor();
   const id = z.uuid().safeParse(userId);
-  if (!id.success || !canManageUser(actor, id.data)) return { ok: false, error: "You don't have permission to do that." } as const;
+  // Non-admins learn nothing about who exists.
+  if (!id.success || !actor.active || !isAdminRole(actor.role)) return DENIED;
 
   const admin = createSupabaseAdminClient();
   const { data: target } = await admin
@@ -61,6 +67,7 @@ async function authorizeManage(userId: unknown) {
     .eq("id", id.data)
     .maybeSingle();
   if (!target) return { ok: false, error: "That user no longer exists." } as const;
+  if (!CAN[capability](actor, target)) return DENIED;
   return { ok: true, actor, admin, target } as const;
 }
 
@@ -106,7 +113,7 @@ export async function addUser(_prev: UserActionState, formData: FormData): Promi
 }
 
 export async function changeUserRole(userId: string, _prev: UserActionState, formData: FormData): Promise<UserActionState> {
-  const auth = await authorizeManage(userId);
+  const auth = await authorizeManage(userId, "role");
   if (!auth.ok) return fail(auth.error);
   const { actor, admin, target } = auth;
 
@@ -123,7 +130,7 @@ export async function changeUserRole(userId: string, _prev: UserActionState, for
 }
 
 export async function resetUserPassword(userId: string): Promise<UserActionState> {
-  const auth = await authorizeManage(userId);
+  const auth = await authorizeManage(userId, "password");
   if (!auth.ok) return fail(auth.error);
   const { actor, admin, target } = auth;
 
@@ -139,7 +146,7 @@ export async function resetUserPassword(userId: string): Promise<UserActionState
 }
 
 export async function setUserActive(userId: string, active: boolean): Promise<UserActionState> {
-  const auth = await authorizeManage(userId);
+  const auth = await authorizeManage(userId, "lifecycle");
   if (!auth.ok) return fail(auth.error);
   const { actor, admin, target } = auth;
   if (active === (target.deactivated_at === null)) return { ok: true, message: "No change." };
@@ -165,7 +172,7 @@ export async function setUserActive(userId: string, active: boolean): Promise<Us
 }
 
 export async function deleteUser(userId: string): Promise<UserActionState> {
-  const auth = await authorizeManage(userId);
+  const auth = await authorizeManage(userId, "lifecycle");
   if (!auth.ok) return fail(auth.error);
   const { actor, admin, target } = auth;
 
@@ -175,4 +182,38 @@ export async function deleteUser(userId: string): Promise<UserActionState> {
   await audit(admin, actor, "user.deleted", target, { role: target.role });
   refresh();
   return { ok: true, message: `${nameOf(target)} was deleted.` };
+}
+
+export async function setStorageLimit(userId: string, _prev: UserActionState, formData: FormData): Promise<UserActionState> {
+  const auth = await authorizeManage(userId, "storageLimit");
+  if (!auth.ok) return fail(auth.error);
+  const { actor, admin, target } = auth;
+
+  const megabytes = z.coerce.number().int().min(1).max(10_240).safeParse(formData.get("megabytes"));
+  if (!megabytes.success) return { ok: false, fieldErrors: { megabytes: ["Enter a whole number between 1 and 10,240"] } };
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ storage_quota_bytes: megabytes.data * 1024 * 1024 })
+    .eq("id", target.id);
+  if (error) return fail("The storage limit couldn't be changed.");
+
+  await audit(admin, actor, "user.storage_limit_changed", target, { megabytes: megabytes.data });
+  refresh();
+  return { ok: true, message: `${nameOf(target)} can now store up to ${megabytes.data} MB.` };
+}
+
+export type UsageBreakdown = { ok: true; rows: { kind: string; records: number; bytes: number }[] } | { ok: false; error: string };
+
+/** Records and storage per module for one member: sizes only, never contents. */
+export async function getUsageBreakdown(userId: string): Promise<UsageBreakdown> {
+  const actor = await currentActor();
+  const id = z.uuid().safeParse(userId);
+  if (!id.success || !canViewUsage(actor)) return { ok: false, error: "You don't have permission to do that." };
+
+  // Called as the admin: the database function checks the role again and returns aggregates only.
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("workspace_usage_breakdown", { p_owner: id.data });
+  if (error) return { ok: false, error: "Usage couldn't be loaded." };
+  return { ok: true, rows: data.map((r) => ({ kind: r.kind, records: Number(r.records), bytes: Number(r.bytes) })) };
 }

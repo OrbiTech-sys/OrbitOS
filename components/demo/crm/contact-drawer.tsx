@@ -12,18 +12,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { DEMO_TODAY, formatDate, relativeDay } from "@/lib/demo/dates";
+import { formatDate, relativeDay } from "@/lib/demo/dates";
 import { stageLabel } from "@/lib/demo/selectors";
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoActions, useDemoData, useDemoLookups } from "@/lib/demo/store";
 import { CONTACT_STAGES, type ContactStage } from "@/lib/demo/types";
 import { cn } from "@/lib/utils";
+import { useToday } from "@/lib/workspace/context";
 
 export function ContactDrawer({ contactId, onClose }: { contactId: string | null; onClose: () => void }) {
   const data = useDemoData();
   const lookups = useDemoLookups();
   const actions = useDemoActions();
   const money = useMoney();
+  const today = useToday();
   const toast = useToast();
   const openRecord = useRecordNav();
   const [quoteFor, setQuoteFor] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export function ContactDrawer({ contactId, onClose }: { contactId: string | null
   const owner = contact ? lookups.team.get(contact.ownerId) : undefined;
   const orders = contact ? data.orders.filter((o) => o.customerId === contact.id).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 4) : [];
   const quotes = contact ? data.quotations.filter((q) => q.customerId === contact.id) : [];
-  const followOverdue = !!contact?.followUpDate && contact.followUpDate < DEMO_TODAY && contact.stage !== "lost";
+  const followOverdue = !!contact?.followUpDate && contact.followUpDate < today && contact.stage !== "lost";
   const history = contact
     ? data.activities.filter((a) => a.message.includes(contact.company) || a.message.includes(contact.name)).slice(0, 4)
     : [];
@@ -101,7 +103,7 @@ export function ContactDrawer({ contactId, onClose }: { contactId: string | null
                       aria-invalid={followOverdue}
                       onChange={(e) => actions.updateContact(contact.id, { followUpDate: e.target.value || null })}
                     />
-                    {followOverdue && <p className="text-xs font-medium text-warning">Overdue · was due {relativeDay(contact.followUpDate!).toLowerCase()}</p>}
+                    {followOverdue && <p className="text-xs font-medium text-warning">Overdue · was due {relativeDay(contact.followUpDate!, today).toLowerCase()}</p>}
                   </div>
                 </div>
 
@@ -128,7 +130,7 @@ export function ContactDrawer({ contactId, onClose }: { contactId: string | null
                       ),
                     },
                     { label: contact.stage === "customer" ? "Lifetime sales" : "Deal value", value: <span className="font-semibold tabular-nums">{money.full(contact.dealValue)}</span> },
-                    { label: "Last contact", value: `${relativeDay(contact.lastContact)} (${formatDate(contact.lastContact)})` },
+                    { label: "Last contact", value: `${relativeDay(contact.lastContact, today)} (${formatDate(contact.lastContact)})` },
                     { label: "Owner", value: owner ? <span className="inline-flex items-center gap-2"><Avatar member={owner} size="sm" />{owner.name}</span> : "—" },
                     { label: "Source", value: contact.source },
                     { label: "Created", value: formatDate(contact.createdAt) },

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/demo/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, ArrowUp, Sparkles } from "lucide-react";
 
@@ -11,6 +11,7 @@ import { SUGGESTED_PROMPTS, answerQuestion, getInsights, type CopilotAnswer } fr
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoData } from "@/lib/demo/store";
 import { cn } from "@/lib/utils";
+import { useIsDemo, useToday } from "@/lib/workspace/context";
 
 const DOT = { danger: "bg-danger", warning: "bg-warning", success: "bg-success", info: "bg-info", neutral: "bg-muted-foreground/40" } as const;
 
@@ -18,15 +19,17 @@ const DOT = { danger: "bg-danger", warning: "bg-warning", success: "bg-success",
 export function InsightsPanel({ className }: { className?: string }) {
   const data = useDemoData();
   const money = useMoney();
+  const today = useToday();
+  const demo = useIsDemo();
   const openRecord = useRecordNav();
-  const insights = useMemo(() => getInsights(data, { money }), [data, money]);
+  const insights = useMemo(() => getInsights(data, { money, today }), [data, money, today]);
   const [answer, setAnswer] = useState<{ q: string; a: CopilotAnswer } | null>(null);
   const [input, setInput] = useState("");
 
   function ask(q: string) {
     const text = q.trim();
     if (!text) return;
-    setAnswer({ q: text, a: answerQuestion(text, data, { money }) });
+    setAnswer({ q: text, a: answerQuestion(text, data, { money, today, demo }) });
     setInput("");
   }
 
@@ -41,7 +44,7 @@ export function InsightsPanel({ className }: { className?: string }) {
             <h2 id="insights-title" className="text-sm leading-none font-semibold">
               AI insights
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">Demo assistant · from your sample data</p>
+            <p className="mt-1 text-xs text-muted-foreground">{demo ? "Demo assistant · from your sample data" : "Assistant · from your own records"}</p>
           </div>
         </div>
         <Link href="/demo/copilot" className="inline-flex items-center gap-1 rounded text-xs font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring">
@@ -93,7 +96,7 @@ export function InsightsPanel({ className }: { className?: string }) {
           }}
         >
           <label htmlFor="insight-input" className="sr-only">
-            Ask the demo assistant
+            {demo ? "Ask the demo assistant" : "Ask the assistant"}
           </label>
           <input
             id="insight-input"

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/demo/link";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, ArrowUp, Info, Sparkles } from "lucide-react";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { SUGGESTED_PROMPTS, answerQuestion, type AnswerBlock, type AnswerItem, type CopilotAnswer, type Tone } from "@/lib/demo/copilot";
 import type { MoneyFormatter } from "@/lib/demo/format";
 import type { DemoData, RecordRef } from "@/lib/demo/types";
+import { useIsDemo, useToday } from "@/lib/workspace/context";
 import { cn } from "@/lib/utils";
 
 const DOT: Record<Tone, string> = {
@@ -171,6 +172,8 @@ export function CopilotChat({
   const scroller = useRef<HTMLDivElement>(null);
   const timer = useRef<number | null>(null);
   const nextId = useRef(1);
+  const today = useToday();
+  const demo = useIsDemo();
 
   useEffect(
     () => () => {
@@ -190,7 +193,7 @@ export function CopilotChat({
     setPending(text);
     // A short pause so the exchange feels like a conversation. Answers are computed locally.
     timer.current = window.setTimeout(() => {
-      const answer = answerQuestion(text, data, { money });
+      const answer = answerQuestion(text, data, { money, today, demo });
       const id = nextId.current++;
       setTurns((t) => [...t, { id, question: text, answer }]);
       setPending(null);
@@ -198,14 +201,14 @@ export function CopilotChat({
   }
 
   return (
-    <section aria-label="AI copilot demo" className={cn("flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevated", height, className)}>
+    <section aria-label={demo ? "AI copilot demo" : "Business assistant"} className={cn("flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevated", height, className)}>
       <header className="flex items-center gap-3 border-b px-4 py-3">
         <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
           <Sparkles className="size-4" aria-hidden="true" />
         </span>
         <div className="min-w-0">
           <h3 className="text-sm leading-none font-semibold text-foreground">OrbitOS Copilot</h3>
-          <p className="mt-1 text-xs text-muted-foreground">Demo assistant · reads the sample data in this workspace</p>
+          <p className="mt-1 text-xs text-muted-foreground">{demo ? "Demo assistant · reads the sample data in this workspace" : "Assistant · reads your own records"}</p>
         </div>
         <span className="ml-auto hidden rounded-full border border-dashed border-input px-2.5 py-1 text-[0.6875rem] font-medium text-muted-foreground sm:inline">
           No AI model is called
@@ -219,8 +222,17 @@ export function CopilotChat({
           </span>
           <div className="min-w-0 flex-1 space-y-3">
             <p className="text-sm leading-relaxed text-foreground/85">
-              Hi! I&apos;m a <strong>demo assistant</strong>. I answer a set of business questions by reading the sample records in this workspace, so every answer
-              matches what you see in the modules. Pick a question or type your own.
+              {demo ? (
+                <>
+                  Hi! I&apos;m a <strong>demo assistant</strong>. I answer a set of business questions by reading the sample records in this workspace, so every answer
+                  matches what you see in the modules. Pick a question or type your own.
+                </>
+              ) : (
+                <>
+                  Hi! I&apos;m a <strong>rule-based assistant</strong>. I answer a set of business questions by reading your own records, so every answer matches what you
+                  see in the modules. Pick a question or type your own.
+                </>
+              )}
             </p>
             <div className="flex flex-wrap gap-2">
               {SUGGESTED_PROMPTS.map((q) => (
@@ -283,7 +295,7 @@ export function CopilotChat({
       >
         <div className="flex items-center gap-2">
           <label htmlFor="copilot-input" className="sr-only">
-            Ask the demo assistant a question
+            {demo ? "Ask the demo assistant a question" : "Ask the assistant a question"}
           </label>
           <input
             id="copilot-input"
@@ -299,7 +311,9 @@ export function CopilotChat({
         </div>
         <p className="mt-2 flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
           <Info className="size-3 shrink-0" aria-hidden="true" />
-          Deterministic demo: it understands the six suggested questions and a few related ones, using only the sample dataset.
+          {demo
+            ? "Deterministic demo: it understands the six suggested questions and a few related ones, using only the sample dataset."
+            : "Rule-based: it understands the six suggested questions and a few related ones, using only your own records. No AI model is called."}
         </p>
       </form>
     </section>

@@ -8,16 +8,18 @@ import { Field, describedBy } from "@/components/shared/form-field";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { DEMO_TODAY, addDays } from "@/lib/demo/dates";
+import { addDays } from "@/lib/demo/dates";
 import { taskSchema, type TaskFormInput, type TaskFormOutput } from "@/lib/demo/schemas";
 import { useDemoActions, useDemoData } from "@/lib/demo/store";
 import { TASK_PRIORITIES } from "@/lib/demo/types";
+import { useWorkspaceEnv } from "@/lib/workspace/context";
 
 const selectCls =
   "h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-card outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30";
 
 function Form({ onDone, defaultProjectId }: { onDone: () => void; defaultProjectId?: string }) {
   const data = useDemoData();
+  const { today, selfId } = useWorkspaceEnv();
   const actions = useDemoActions();
   const toast = useToast();
   const {
@@ -29,9 +31,9 @@ function Form({ onDone, defaultProjectId }: { onDone: () => void; defaultProject
     defaultValues: {
       title: "",
       projectId: defaultProjectId ?? data.projects[0]?.id ?? "",
-      assigneeId: "tm-alex",
+      assigneeId: selfId,
       priority: "medium",
-      dueDate: addDays(DEMO_TODAY, 3),
+      dueDate: addDays(today, 3),
     },
     mode: "onTouched",
   });
@@ -99,15 +101,43 @@ function Form({ onDone, defaultProjectId }: { onDone: () => void; defaultProject
   );
 }
 
-export function AddTaskDialog({ open, onOpenChange, defaultProjectId }: { open: boolean; onOpenChange: (open: boolean) => void; defaultProjectId?: string }) {
+export function AddTaskDialog({
+  open,
+  onOpenChange,
+  defaultProjectId,
+  onCreateProject,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  defaultProjectId?: string;
+  /** Offered when there is no project yet, since every task belongs to one. */
+  onCreateProject?: () => void;
+}) {
+  const data = useDemoData();
+  const noProjects = data.projects.length === 0;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add task</DialogTitle>
-          <DialogDescription>New tasks start as “To do” and count toward the dashboard.</DialogDescription>
+          <DialogDescription>{noProjects ? "Every task belongs to a project." : "New tasks start as “To do” and count toward the dashboard."}</DialogDescription>
         </DialogHeader>
-        {open && <Form onDone={() => onOpenChange(false)} defaultProjectId={defaultProjectId} />}
+        {open && noProjects && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Create your first project, then add tasks to it.</p>
+            <DialogFooter className="border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              {onCreateProject && (
+                <Button type="button" onClick={onCreateProject}>
+                  New project
+                </Button>
+              )}
+            </DialogFooter>
+          </div>
+        )}
+        {open && !noProjects && <Form onDone={() => onOpenChange(false)} defaultProjectId={defaultProjectId} />}
       </DialogContent>
     </Dialog>
   );

@@ -11,17 +11,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { CURRENCIES, moneyFormatter } from "@/lib/demo/format";
-import { resetSettings, updateSettings, useSettings } from "@/lib/demo/settings";
+import { useSettings, useSettingsActions } from "@/lib/demo/settings";
 import { useDemoActions } from "@/lib/demo/store";
+import { useIsDemo } from "@/lib/workspace/context";
+import { AccountCard, StorageCard } from "@/components/workspace/account-cards";
+import { SettingsTabs } from "@/components/workspace/settings-tabs";
 import type { ModuleKey, NotificationPrefs, ThemePreference } from "@/lib/demo/types";
 import { cn } from "@/lib/utils";
 
-const profileSchema = z.object({
-  businessName: z.string().trim().min(1, "Business name is required").max(60, "Keep it under 60 characters"),
-  contactEmail: z.string().trim().min(1, "Contact email is required").pipe(z.email("Enter a valid email address")),
-  location: z.string().trim().max(60, "Keep it under 60 characters"),
-  industry: z.string().trim().min(1),
-});
+// A member can leave the optional details blank; the demo profile always has them.
+const profileSchema = (demo: boolean) =>
+  z.object({
+    businessName: z.string().trim().min(1, "Business name is required").max(60, "Keep it under 60 characters"),
+    contactEmail: demo
+      ? z.string().trim().min(1, "Contact email is required").pipe(z.email("Enter a valid email address"))
+      : z.string().trim().refine((v) => v === "" || z.email().safeParse(v).success, "Enter a valid email address"),
+    location: z.string().trim().max(60, "Keep it under 60 characters"),
+    industry: demo ? z.string().trim().min(1) : z.string().trim(),
+  });
 
 const INDUSTRIES = ["Retail and e-commerce", "Professional services", "Agencies and consulting", "Manufacturing", "Wholesale and distribution", "Technology and SaaS"];
 
@@ -40,7 +47,7 @@ const NOTIFICATIONS: { key: keyof NotificationPrefs; label: string; hint: string
 ];
 
 const MODULES: { key: ModuleKey; label: string; hint: string }[] = [
-  { key: "copilot", label: "AI Copilot", hint: "Demo assistant" },
+  { key: "copilot", label: "AI Copilot", hint: "Rule-based assistant" },
   { key: "crm", label: "CRM", hint: "Contacts and leads" },
   { key: "sales", label: "Sales", hint: "Quotations and pipeline" },
   { key: "orders", label: "Orders", hint: "Order management" },
@@ -55,6 +62,8 @@ export function SettingsView() {
   const settings = useSettings();
   const actions = useDemoActions();
   const toast = useToast();
+  const demo = useIsDemo();
+  const { update: updateSettings, reset: resetSettings } = useSettingsActions();
 
   const [profile, setProfile] = useState({
     businessName: settings.businessName,
@@ -66,7 +75,7 @@ export function SettingsView() {
 
   function saveProfile(e: React.FormEvent) {
     e.preventDefault();
-    const parsed = profileSchema.safeParse(profile);
+    const parsed = profileSchema(demo).safeParse(profile);
     if (!parsed.success) {
       const next: Record<string, string> = {};
       for (const issue of parsed.error.issues) next[String(issue.path[0])] = issue.message;
@@ -75,15 +84,18 @@ export function SettingsView() {
     }
     setErrors({});
     updateSettings(parsed.data);
-    toast.success("Business profile saved", "Stored in this browser only.");
+    toast.success("Business profile saved", demo ? "Stored in this browser only." : "Saved to your account.");
   }
 
   return (
     <>
-      <PageHeader title="Settings" description="Local demonstration preferences." />
-      <DemoNotice className="mb-6">
-        <strong>These are local demo settings, not account settings.</strong> They are saved in this browser&apos;s local storage, are never sent anywhere, and there is no real account, billing or security configuration here.
-      </DemoNotice>
+      <PageHeader title="Settings" description={demo ? "Local demonstration preferences." : "Your business profile and preferences."} />
+      <SettingsTabs />
+      {demo && (
+        <DemoNotice className="mb-6">
+          <strong>These are local demo settings, not account settings.</strong> They are saved in this browser&apos;s local storage, are never sent anywhere, and there is no real account, billing or security configuration here.
+        </DemoNotice>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card title="Business profile" description="Shown in the sidebar and dashboard greeting">
@@ -99,6 +111,7 @@ export function SettingsView() {
                   onChange={(e) => setProfile({ ...profile, industry: e.target.value })}
                   className="h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-card outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
                 >
+                  {!demo && <option value="">Select an industry</option>}
                   {INDUSTRIES.map((i) => (
                     <option key={i}>{i}</option>
                   ))}
@@ -138,11 +151,11 @@ export function SettingsView() {
               ))}
             </select>
             <p className="mt-3 text-sm text-muted-foreground">
-              Example: a sample order of <strong className="text-foreground">{moneyFormatter(settings.currency).full(12345)}</strong>. The sample data is stored in one base currency and only the symbol and format change.
+              Example: {demo ? "a sample order" : "an amount"} of <strong className="text-foreground">{moneyFormatter(settings.currency).full(12345)}</strong>. {demo ? "The sample data" : "Your data"} is stored as entered and only the symbol and format change.
             </p>
           </Card>
 
-          <Card title="Theme" description="Applies to the demo workspace" action={<Palette className="size-4 text-muted-foreground" aria-hidden="true" />}>
+          <Card title="Theme" description={demo ? "Applies to the demo workspace" : "Applies to your workspace"} action={<Palette className="size-4 text-muted-foreground" aria-hidden="true" />}>
             <div role="radiogroup" aria-label="Theme preference" className="grid grid-cols-3 gap-3">
               {THEMES.map((t) => {
                 const active = settings.theme === t.value;
@@ -198,31 +211,40 @@ export function SettingsView() {
           <p className="mt-3 text-xs text-muted-foreground">Overview and Settings are always visible.</p>
         </Card>
 
-        <Card className="xl:col-span-2" title="Reset" description="Start over with fresh sample data or default preferences">
+        {!demo && <StorageCard />}
+        {!demo && <AccountCard />}
+
+        <Card className="xl:col-span-2" title="Reset" description={demo ? "Start over with fresh sample data or default preferences" : "Return your preferences to their defaults"}>
           <div className="flex flex-wrap gap-3">
+            {demo && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  actions.reset();
+                  toast.success("Demo data reset", "All sample records were restored.");
+                }}
+              >
+                <RotateCcw /> Reset demo data
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {
-                actions.reset();
-                toast.success("Demo data reset", "All sample records were restored.");
-              }}
-            >
-              <RotateCcw /> Reset demo data
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                resetSettings();
-                setProfile({ businessName: "Meridian Workspace Supply", contactEmail: "hello@meridianworkspace.example", location: "Austin, TX (sample)", industry: "Wholesale and distribution" });
-                toast.success("Preferences reset", "Defaults restored and local storage cleared.");
+                const defaults = resetSettings();
+                setProfile({ businessName: defaults.businessName, contactEmail: defaults.contactEmail, location: defaults.location, industry: defaults.industry });
+                toast.success("Preferences reset", demo ? "Defaults restored and local storage cleared." : "Defaults restored. Your records are untouched.");
               }}
             >
               <RotateCcw /> Reset preferences
             </Button>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Preferences are stored under the local-storage key <code className="rounded bg-muted px-1 py-0.5 font-mono">orbitos-demo-settings-v1</code>. Sample records are kept in memory only.
-          </p>
+          {demo ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Preferences are stored under the local-storage key <code className="rounded bg-muted px-1 py-0.5 font-mono">orbitos-demo-settings-v1</code>. Sample records are kept in memory only.
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">Resetting preferences does not delete any of your records.</p>
+          )}
         </Card>
       </div>
     </>

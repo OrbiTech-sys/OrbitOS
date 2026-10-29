@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { stockStatus } from "@/lib/demo/selectors";
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoActions, useDemoData } from "@/lib/demo/store";
+import { useIsDemo } from "@/lib/workspace/context";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,6 +48,7 @@ const selectCls =
   "h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-card outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20";
 
 function Form({ mode, initialCustomerId, onDone }: { mode: Mode; initialCustomerId?: string; onDone: () => void }) {
+  const demo = useIsDemo();
   const data = useDemoData();
   const actions = useDemoActions();
   const money = useMoney();
@@ -245,7 +247,7 @@ function Form({ mode, initialCustomerId, onDone }: { mode: Mode; initialCustomer
         <input type="checkbox" checked={flag} onChange={(e) => setFlag(e.target.checked)} className="mt-0.5 size-4 rounded border-input accent-[var(--primary)]" />
         <span>
           {mode === "order" ? "Issue an invoice straight away" : "Mark as sent"}
-          <span className="block text-xs text-muted-foreground">{mode === "order" ? "Demo only: no accounting entry or email is created." : "Demo only: nothing is emailed."}</span>
+          <span className="block text-xs text-muted-foreground">{mode === "order" ? (demo ? "Demo only: no accounting entry or email is created." : "No email is sent.") : demo ? "Demo only: nothing is emailed." : "Nothing is emailed from OrbitOS yet."}</span>
         </span>
       </label>
 
@@ -275,6 +277,7 @@ export function SalesDocDialog({
   onOpenChange: (open: boolean) => void;
   initialCustomerId?: string;
 }) {
+  const demo = useIsDemo();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
@@ -282,7 +285,7 @@ export function SalesDocDialog({
           <DialogTitle>{mode === "order" ? "Create order" : "New quotation"}</DialogTitle>
           <DialogDescription>
             {mode === "order"
-              ? "Stock is reserved when the order is created. Everything updates locally in this demo."
+              ? demo ? "Stock is reserved when the order is created. Everything updates locally in this demo." : "Stock is reserved when the order is created."
               : "Quotations can be converted to an order once accepted. Nothing is sent."}
           </DialogDescription>
         </DialogHeader>

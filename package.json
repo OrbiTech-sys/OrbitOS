@@ -11,7 +11,8 @@
     "db:migrate": "node --env-file-if-exists=.env.local scripts/db/migrate.mjs",
     "db:seed": "node --env-file-if-exists=.env.local scripts/db/seed.mjs",
     "db:check": "node --env-file-if-exists=.env.local scripts/db/check.mjs",
-    "db:setup": "npm run db:migrate && npm run db:seed && npm run db:check"
+    "db:setup": "npm run db:migrate && npm run db:seed && npm run db:check",
+    "test:workspace": "tsx --env-file-if-exists=.env.local scripts/workspace/check.mts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
@@ -41,6 +42,7 @@
     "eslint-config-next": "16.4.3",
     "postgres": "^3.4.9",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

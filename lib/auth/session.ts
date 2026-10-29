@@ -14,8 +14,10 @@ export type CurrentUser = {
   fullName: string | null;
   role: AppRole;
   mustChangePassword: boolean;
-  /** False once a super admin deactivates the account; RLS already denies them elevated access. */
+  /** False once an admin deactivates the account; RLS already denies them everything but their own profile. */
   active: boolean;
+  /** How much workspace data the account may store. */
+  storageQuotaBytes: number;
 };
 
 /**
@@ -36,7 +38,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("email, full_name, role, must_change_password, deactivated_at")
+    .select("email, full_name, role, must_change_password, deactivated_at, storage_quota_bytes")
     .eq("id", id)
     .maybeSingle();
   if (!profile) return null;
@@ -48,6 +50,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     role: profile.role,
     mustChangePassword: profile.must_change_password,
     active: profile.deactivated_at === null,
+    storageQuotaBytes: Number(profile.storage_quota_bytes),
   };
 });
 
@@ -59,8 +62,8 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 export async function requireUser({ allowTemporaryPassword = false } = {}): Promise<CurrentUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in?reason=session");
-  if (!user.active) redirect("/admin/deactivated");
-  if (user.mustChangePassword && !allowTemporaryPassword) redirect("/admin/password");
+  if (!user.active) redirect("/account/deactivated");
+  if (user.mustChangePassword && !allowTemporaryPassword) redirect("/account/password");
   return user;
 }
 

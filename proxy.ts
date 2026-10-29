@@ -3,17 +3,19 @@ import { createServerClient } from "@supabase/ssr";
 
 import { cookieOptions, isSupabaseConfigured, supabaseConfig } from "@/lib/supabase/config";
 
+const PROTECTED = /^\/(workspace|account)(\/|$)/;
+
 /**
- * Refreshes the Supabase session cookie and gates the admin area. It only runs
- * on auth routes, so the marketing site and demo stay static and untouched.
- * Pages and Server Actions still verify the user themselves; this is the first
- * line, not the only one.
+ * Refreshes the Supabase session cookie and gates the signed-in areas (workspace,
+ * account). It only runs on those routes and the sign-in page, so the marketing
+ * site and demo stay static and untouched. Pages and Server Actions still verify
+ * the user themselves; this is the first line, not the only one.
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (!isSupabaseConfigured()) {
     // Nobody can be signed in yet; the sign-in page explains what's missing.
-    return pathname.startsWith("/admin") ? NextResponse.redirect(new URL("/sign-in", request.url)) : NextResponse.next();
+    return PROTECTED.test(pathname) ? NextResponse.redirect(new URL("/sign-in", request.url)) : NextResponse.next();
   }
 
   let response = NextResponse.next({ request });
@@ -36,15 +38,13 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const signedIn = !!data?.claims?.sub;
 
-  if (pathname.startsWith("/admin") && !signedIn) {
+  if (PROTECTED.test(pathname) && !signedIn) {
     const target = new URL("/sign-in", request.url);
     target.searchParams.set("next", pathname);
     return redirectKeepingCookies(target, response);
   }
-  // ?reason=session means a page found this session unusable (e.g. the account was deleted).
-  if (pathname === "/sign-in" && signedIn && !request.nextUrl.searchParams.has("reason")) {
-    return redirectKeepingCookies(new URL("/admin", request.url), response);
-  }
+  // The sign-in page always shows its form, even with a session: signing in is something you
+  // do by entering credentials, and a session ends only when you click Sign out.
   return response;
 }
 
@@ -58,5 +58,5 @@ function redirectKeepingCookies(target: URL, from: NextResponse) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/sign-in"],
+  matcher: ["/workspace/:path*", "/account/:path*", "/sign-in"],
 };

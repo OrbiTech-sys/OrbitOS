@@ -95,6 +95,17 @@ try {
   `;
   expect(!auditPriv.anon_any && !auditPriv.auth_write, "Audit log is closed to visitors and read-only for users", "audit_log privileges are too broad");
 
+  const [ws] = await sql`
+    select
+      has_table_privilege('anon', 'public.workspace_records', 'select, insert, update, delete') as anon_records,
+      has_table_privilege('anon', 'public.workspace_usage', 'select, insert, update, delete') as anon_usage,
+      has_table_privilege('authenticated', 'public.workspace_usage', 'insert, update, delete') as auth_usage_write,
+      has_function_privilege('anon', 'public.workspace_apply(jsonb, jsonb)', 'execute') as anon_apply,
+      has_function_privilege('anon', 'public.workspace_usage_breakdown(uuid)', 'execute') as anon_breakdown
+  `;
+  expect(!ws.anon_records && !ws.anon_usage && !ws.anon_apply && !ws.anon_breakdown, "Visitors have no access to workspace data or its functions", "anon can reach workspace tables or functions");
+  expect(!ws.auth_usage_write, "Members cannot edit their own storage usage numbers", "authenticated can write workspace_usage");
+
   // Runs a statement in a savepoint, then rolls the whole transaction back. Returns its error, if any.
   const refused = async (statement) => {
     let error = null;

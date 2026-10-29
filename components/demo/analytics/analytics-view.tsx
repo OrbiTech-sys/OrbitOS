@@ -10,6 +10,7 @@ import { leadFunnel, monthlyTrend, ordersByStatus, revenueByCategory } from "@/l
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoData } from "@/lib/demo/store";
 import { cn } from "@/lib/utils";
+import { useToday } from "@/lib/workspace/context";
 
 const AXIS = { fontSize: 11, fill: "var(--muted-foreground)" } as const;
 
@@ -45,15 +46,16 @@ function Segmented<T extends string | number>({ label, value, onChange, options 
 export function AnalyticsView() {
   const data = useDemoData();
   const money = useMoney();
+  const today = useToday();
 
   const [months, setMonths] = useState<3 | 6 | 12>(12);
   const [metric, setMetric] = useState<"revenue" | "orders">("revenue");
   const [catMonths, setCatMonths] = useState<3 | 12>(12);
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
 
-  const trend = useMemo(() => monthlyTrend(data, months).map((p) => ({ ...p, expensesFull: p.partial ? null : p.expenses })), [data, months]);
+  const trend = useMemo(() => monthlyTrend(data, months, today).map((p) => ({ ...p, expensesFull: p.partial ? null : p.expenses })), [data, months, today]);
   const statuses = useMemo(() => ordersByStatus(data).filter((s) => s.count > 0), [data]);
-  const categories = useMemo(() => revenueByCategory(data, catMonths), [data, catMonths]);
+  const categories = useMemo(() => revenueByCategory(data, catMonths, today), [data, catMonths, today]);
   const funnel = useMemo(() => leadFunnel(data), [data]);
   const totalOrders = statuses.reduce((s, x) => s + x.count, 0);
 

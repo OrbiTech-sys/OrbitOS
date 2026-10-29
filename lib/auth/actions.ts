@@ -8,10 +8,10 @@ import { changePasswordSchema, signInSchema, type AuthFormState } from "@/lib/au
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-/** Only same-site admin paths, so ?next= can never become an open redirect. */
+/** Only same-site app paths, so ?next= can never become an open redirect. */
 function safeNext(value: FormDataEntryValue | null) {
   const next = typeof value === "string" ? value : "";
-  return /^\/admin(\/[\w-]+)*$/.test(next) ? next : "/admin";
+  return /^\/workspace(\/[\w-]+)*$/.test(next) ? next : null;
 }
 
 export async function signIn(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
@@ -21,7 +21,7 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
   if (!isSupabaseConfigured()) return { email, error: "The database isn't connected yet." };
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data: signedIn, error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) {
     if (error.status === 429) return { email, error: "Too many attempts. Wait a minute and try again." };
     // Supabase only reports a ban once the password is correct.
@@ -31,7 +31,11 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
     return { email, error: "Sign-in is unavailable right now. Please try again shortly." };
   }
 
-  redirect(safeNext(formData.get("next")));
+  // Everyone starts in their workspace (admins manage users from its Settings). A temporary
+  // password is replaced first, and a page they asked for is honoured.
+  const { data: profile } = await supabase.from("profiles").select("must_change_password").eq("id", signedIn.user.id).maybeSingle();
+  if (profile?.must_change_password) redirect("/account/password");
+  redirect(safeNext(formData.get("next")) ?? "/workspace");
 }
 
 export async function signOut() {
@@ -39,13 +43,13 @@ export async function signOut() {
     const supabase = await createSupabaseServerClient();
     await supabase.auth.signOut({ scope: "local" });
   }
-  redirect("/sign-in");
+  redirect("/");
 }
 
 export async function changePassword(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in?reason=session");
-  if (!user.active) redirect("/admin/deactivated");
+  if (!user.active) redirect("/account/deactivated");
 
   const parsed = changePasswordSchema.safeParse({
     currentPassword: formData.get("currentPassword"),
@@ -72,5 +76,5 @@ export async function changePassword(_prev: AuthFormState, formData: FormData): 
   }
 
   // The on_auth_user_updated trigger clears must_change_password in the database.
-  redirect("/admin?password=updated");
+  redirect("/account/password?done=1");
 }

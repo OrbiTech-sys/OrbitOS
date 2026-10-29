@@ -1,12 +1,13 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/demo/link";
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowDownRight, ArrowUp, ArrowUpDown, ArrowUpRight, ChevronLeft, ChevronRight, Info, Search, SearchX } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/lib/demo/settings";
 import type { ModuleKey } from "@/lib/demo/types";
+import { useIsDemo } from "@/lib/workspace/context";
 import { cn } from "@/lib/utils";
 
 const slug = (text: string) => text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -161,15 +162,16 @@ export function EmptyState({
   );
 }
 
-/** Gate for modules the user has hidden in Settings (local demo preference). */
+/** Gate for modules the user has hidden in Settings. */
 export function ModuleGate({ module, name, children }: { module: ModuleKey; name: string; children: React.ReactNode }) {
   const settings = useSettings();
+  const demo = useIsDemo();
   if (settings.modules[module]) return <>{children}</>;
   return (
     <Card>
       <EmptyState
         title={`${name} is hidden`}
-        description="You turned this module off in Settings. This is a local demo preference."
+        description={demo ? "You turned this module off in Settings. This is a local demo preference." : "You turned this module off in Settings. Turn it back on there whenever you like."}
         action={
           <Button asChild>
             <Link href="/demo/settings">Open Settings</Link>

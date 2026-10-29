@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useDemoPathname } from "@/components/demo/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { ChevronRight, Menu, Search } from "lucide-react";
 
@@ -9,6 +8,7 @@ import { GlobalSearch } from "@/components/demo/global-search";
 import { NAV_ITEMS, ROUTE_LABELS } from "@/components/demo/nav";
 import { NotificationsMenu } from "@/components/demo/notifications-menu";
 import { ProfileMenu } from "@/components/demo/profile-menu";
+import { SaveErrorBanner, SaveIndicator } from "@/components/workspace/save-indicator";
 import { SidebarContent } from "@/components/demo/sidebar";
 import { ToastProvider } from "@/components/demo/toast";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { DEMO_TODAY, formatDate } from "@/lib/demo/dates";
 import { useSettings } from "@/lib/demo/settings";
 import { DemoProvider, useDemoActions } from "@/lib/demo/store";
 import { cn } from "@/lib/utils";
+import { useWorkspaceEnv } from "@/lib/workspace/context";
 
 /* ------------------------------------------------------------- Theme ----- */
 
@@ -51,14 +52,15 @@ function ThemeEffect() {
 /* --------------------------------------------------------- Breadcrumbs --- */
 
 function Breadcrumbs() {
-  const pathname = usePathname();
+  const pathname = useDemoPathname();
+  const { mode } = useWorkspaceEnv();
   const label = ROUTE_LABELS[pathname] ?? NAV_ITEMS.find((n) => n.href !== "/demo" && pathname.startsWith(n.href))?.label ?? "Overview";
   return (
     <nav aria-label="Breadcrumb" className="min-w-0">
       <ol className="flex items-center gap-1.5 text-sm">
         <li className="hidden text-muted-foreground sm:block">
           <Link href="/demo" className="rounded hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-            Demo workspace
+            {mode === "demo" ? "Demo workspace" : "Workspace"}
           </Link>
         </li>
         <li aria-hidden="true" className="hidden text-muted-foreground/60 sm:block">
@@ -74,9 +76,10 @@ function Breadcrumbs() {
 
 /* ------------------------------------------------------------- Shell ----- */
 
-function ShellInner({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+export function ShellInner({ children }: { children: React.ReactNode }) {
+  const pathname = useDemoPathname();
   const { syncRecordToRoute } = useDemoActions();
+  const { mode } = useWorkspaceEnv();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -121,8 +124,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       {/* Mobile sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" showCloseButton={false} className="w-72 gap-0 border-sidebar-border bg-sidebar p-0 sm:max-w-72">
-          <SheetTitle className="sr-only">Demo navigation</SheetTitle>
-          <SheetDescription className="sr-only">Navigate between the demo modules</SheetDescription>
+          <SheetTitle className="sr-only">{mode === "demo" ? "Demo navigation" : "Workspace navigation"}</SheetTitle>
+          <SheetDescription className="sr-only">Navigate between the modules</SheetDescription>
           <SidebarContent onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
@@ -148,14 +151,19 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             <Button variant="ghost" size="icon" className="md:hidden" aria-label="Search the workspace" onClick={() => setSearchOpen(true)}>
               <Search />
             </Button>
+            <SaveIndicator />
             <NotificationsMenu />
             <ProfileMenu />
           </div>
         </header>
 
-        <div className="border-b bg-warning-soft/70 px-4 py-1.5 text-center text-[0.6875rem] font-medium text-warning sm:px-6">
-          Simulated demo · fictional sample data as of {formatDate(DEMO_TODAY)} · changes stay in your browser and reset on refresh
-        </div>
+        {mode === "demo" ? (
+          <div className="border-b bg-warning-soft/70 px-4 py-1.5 text-center text-[0.6875rem] font-medium text-warning sm:px-6">
+            Simulated demo · fictional sample data as of {formatDate(DEMO_TODAY)} · changes stay in your browser and reset on refresh
+          </div>
+        ) : (
+          <SaveErrorBanner />
+        )}
 
         <main id="demo-main" tabIndex={-1} className="mx-auto w-full max-w-[90rem] min-w-0 flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8 lg:py-8">
           {children}

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/demo/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, CalendarClock, CircleCheck, FilePlus2, Plus, Send, Target, XCircle } from "lucide-react";
 
@@ -11,12 +11,13 @@ import { useRecordNav } from "@/components/demo/use-record-nav";
 import { OrderStatusBadge, QuotationStatusBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DEMO_TODAY, formatDate, monthKey, relativeDay } from "@/lib/demo/dates";
+import { formatDate, monthKey, relativeDay } from "@/lib/demo/dates";
 import { OPEN_STAGES, computeMetrics, stageLabel } from "@/lib/demo/selectors";
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoActions, useDemoData, useDemoLookups, useOpenRecord } from "@/lib/demo/store";
 import { QUOTATION_STATUSES, type ContactStage, type Quotation, type QuotationStatus } from "@/lib/demo/types";
 import { cn } from "@/lib/utils";
+import { useIsDemo, useToday } from "@/lib/workspace/context";
 
 type StatusFilter = "all" | QuotationStatus;
 const BOARD: ContactStage[] = ["new", "qualified", "proposal", "negotiation"];
@@ -25,8 +26,10 @@ export function SalesView() {
   const data = useDemoData();
   const lookups = useDemoLookups();
   const money = useMoney();
+  const today = useToday();
   const actions = useDemoActions();
   const toast = useToast();
+  const demo = useIsDemo();
   const openRecord = useRecordNav();
   const focusedQuoteId = useOpenRecord("quotation");
 
@@ -35,11 +38,11 @@ export function SalesView() {
   const [orderOpen, setOrderOpen] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
 
-  const m = useMemo(() => computeMetrics(data), [data]);
+  const m = useMemo(() => computeMetrics(data, today), [data, today]);
   const sentQuotes = data.quotations.filter((q) => q.status === "sent");
   const decided = data.quotations.filter((q) => ["accepted", "declined", "expired"].includes(q.status));
   const winRate = decided.length ? (decided.filter((q) => q.status === "accepted").length / decided.length) * 100 : null;
-  const monthOrders = data.orders.filter((o) => o.status !== "cancelled" && monthKey(o.date) === monthKey(DEMO_TODAY));
+  const monthOrders = data.orders.filter((o) => o.status !== "cancelled" && monthKey(o.date) === monthKey(today));
   const avgOrder = monthOrders.length ? monthOrders.reduce((s, o) => s + o.total, 0) / monthOrders.length : 0;
 
   const counts = useMemo(() => {
@@ -85,7 +88,7 @@ export function SalesView() {
       header: "Valid until",
       hideBelow: "md",
       sortValue: (q) => q.validUntil,
-      cell: (q) => <span className={cn(q.status === "sent" && q.validUntil < DEMO_TODAY ? "font-medium text-danger" : "text-muted-foreground")}>{formatDate(q.validUntil)}</span>,
+      cell: (q) => <span className={cn(q.status === "sent" && q.validUntil < today ? "font-medium text-danger" : "text-muted-foreground")}>{formatDate(q.validUntil)}</span>,
     },
     { key: "status", header: "Status", sortValue: (q) => q.status, cell: (q) => <QuotationStatusBadge status={q.status} /> },
     { key: "total", header: "Total", align: "right", sortValue: (q) => q.total, cell: (q) => <span className="font-semibold">{money.full(q.total)}</span> },
@@ -96,7 +99,7 @@ export function SalesView() {
       cell: (q) => {
         if (q.status === "draft")
           return (
-            <Button variant="outline" size="sm" onClick={() => { actions.setQuotationStatus(q.id, "sent"); toast.success(`${q.number} marked as sent`, "Demo only: nothing was emailed."); }}>
+            <Button variant="outline" size="sm" onClick={() => { actions.setQuotationStatus(q.id, "sent"); toast.success(`${q.number} marked as sent`, demo ? "Demo only: nothing was emailed." : "Nothing is emailed from OrbitOS yet."); }}>
               <Send /> Send
             </Button>
           );
@@ -217,9 +220,9 @@ export function SalesView() {
                             <span className="mt-2 flex items-center justify-between text-xs">
                               <span className="font-semibold tabular-nums">{money.full(c.dealValue)}</span>
                               {c.followUpDate && (
-                                <span className={cn("inline-flex items-center gap-1", c.followUpDate <= DEMO_TODAY ? "font-medium text-warning" : "text-muted-foreground")}>
+                                <span className={cn("inline-flex items-center gap-1", c.followUpDate <= today ? "font-medium text-warning" : "text-muted-foreground")}>
                                   <CalendarClock className="size-3" aria-hidden="true" />
-                                  {relativeDay(c.followUpDate)}
+                                  {relativeDay(c.followUpDate, today)}
                                 </span>
                               )}
                             </span>

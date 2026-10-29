@@ -13,8 +13,24 @@ type ProfileRow = {
   role: AppRole;
   must_change_password: boolean;
   deactivated_at: string | null;
+  storage_quota_bytes: number;
   created_at: string;
   updated_at: string;
+};
+
+type WorkspaceRecordRow = {
+  owner_id: string;
+  kind: string;
+  id: string;
+  data: Record<string, unknown>;
+  updated_at: string;
+};
+
+type WorkspaceUsageRow = {
+  owner_id: string;
+  records: number;
+  bytes: number;
+  last_write_at: string | null;
 };
 
 type AuditLogRow = {
@@ -37,6 +53,18 @@ export type Database = {
         Update: Partial<ProfileRow>;
         Relationships: [];
       };
+      workspace_records: {
+        Row: WorkspaceRecordRow;
+        Insert: Pick<WorkspaceRecordRow, "kind" | "id" | "data"> & Partial<WorkspaceRecordRow>;
+        Update: Partial<WorkspaceRecordRow>;
+        Relationships: [];
+      };
+      workspace_usage: {
+        Row: WorkspaceUsageRow;
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       audit_log: {
         Row: AuditLogRow;
         Insert: Pick<AuditLogRow, "actor_id" | "actor_email" | "action"> & Partial<Omit<AuditLogRow, "id">>;
@@ -45,7 +73,16 @@ export type Database = {
       };
     };
     Views: Record<never, never>;
-    Functions: Record<never, never>;
+    Functions: {
+      workspace_apply: {
+        Args: { p_upserts?: unknown; p_deletes?: unknown };
+        Returns: undefined;
+      };
+      workspace_usage_breakdown: {
+        Args: { p_owner: string };
+        Returns: { kind: string; records: number; bytes: number }[];
+      };
+    };
     Enums: { app_role: AppRole };
     CompositeTypes: Record<never, never>;
   };

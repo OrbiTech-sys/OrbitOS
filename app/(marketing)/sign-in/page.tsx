@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { DatabaseZap, LockKeyhole } from "lucide-react";
 
 import { SignInForm } from "@/components/auth/sign-in-form";
+import { SignedInNotice } from "@/components/auth/signed-in-notice";
 import { LogoMark } from "@/components/shared/logo";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -18,6 +19,9 @@ export default function SignInPage() {
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">Sign in to OrbitOS</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Accounts are created by an administrator. There is no public sign-up.</p>
         </div>
+        <Suspense fallback={null}>
+          <SignedInNotice />
+        </Suspense>
         <div className="mt-7">
           {isSupabaseConfigured() ? (
             <Suspense fallback={<div className="h-[15.5rem]" aria-hidden="true" />}>

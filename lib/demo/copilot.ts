@@ -150,6 +150,8 @@ export function classifyQuestion(question: string): { intent: CopilotIntent; sco
 interface Options {
   today?: ISODate;
   money?: MoneyFormatter;
+  /** Describe the assistant as a demo reading sample data (default), or as reading the member's own records. */
+  demo?: boolean;
 }
 
 export function answerQuestion(question: string, data: DemoData, options: Options = {}): CopilotAnswer {
@@ -176,7 +178,7 @@ export function answerQuestion(question: string, data: DemoData, options: Option
     case "pending_orders":
       return pendingOrdersAnswer(data, money);
     default:
-      return helpAnswer();
+      return helpAnswer(options.demo ?? true);
   }
 }
 
@@ -540,14 +542,14 @@ function pendingOrdersAnswer(data: DemoData, money: MoneyFormatter): CopilotAnsw
   };
 }
 
-function helpAnswer(): CopilotAnswer {
+function helpAnswer(demo: boolean): CopilotAnswer {
   return {
     intent: "help",
-    title: "I can help with your sample business data",
+    title: demo ? "I can help with your sample business data" : "I can help with your business records",
     blocks: [
       {
         type: "text",
-        text: "I'm a demo assistant, so I only understand a set of business questions about the records in this workspace: invoices, stock, leads, sales, tasks, orders and customers. Try one of these:",
+        text: `I'm a ${demo ? "demo" : "rule-based"} assistant, so I only understand a set of business questions about the records in this workspace: invoices, stock, leads, sales, tasks, orders and customers. Try one of these:`,
       },
       {
         type: "list",
