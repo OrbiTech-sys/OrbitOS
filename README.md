@@ -4,8 +4,8 @@ OrbitOS is a **working placeholder name** for a simpler, modular business operat
 believable proof of concept: a marketing website plus an interactive demo application, built on **fictional sample data that
 lives entirely in the browser**.
 
-> There is no backend, database, authentication, payment or AI service in this phase. Everything the demo does is simulated
-> locally and clearly labelled as such in the UI.
+> The demo itself still runs on in-browser sample data. Authentication and the admin area (`/sign-in`, `/admin`) run on
+> Supabase; see [Supabase](#supabase-auth-and-database). There is no payment or AI service in this phase.
 
 ## Quick start
 
@@ -21,9 +21,34 @@ npm run dev        # http://localhost:3000
 | `npm run start`     | Serve the production build                           |
 | `npm run lint`      | ESLint (Next.js core-web-vitals + TypeScript rules)  |
 | `npm run typecheck` | `tsc --noEmit`                                       |
+| `npm run db:setup`  | Migrate, seed the super admin, then run the checks   |
+| `npm run db:check`  | End-to-end connection and security check             |
 
-Requires Node 20+. The project uses **Next.js 16** (App Router, Cache Components enabled), **React 19**, **TypeScript** (strict),
+Requires Node 22.9+ (the `db:*` scripts use `--env-file-if-exists`). The project uses **Next.js 16** (App Router, Cache Components enabled), **React 19**, **TypeScript** (strict),
 **Tailwind CSS v4**, **shadcn/ui** primitives (Radix), **Lucide**, **Framer Motion**, **Recharts**, **React Hook Form + Zod**.
+
+## Supabase (auth and database)
+
+1. Copy `.env.example` to `.env.local` and fill it in (Supabase dashboard → Project Settings → API Keys, and Connect →
+   Session pooler connection string). `.env.local` is git-ignored.
+2. In Supabase → Authentication → Sign In / Providers, turn off **Allow new users to sign up**. Accounts are created by
+   an administrator.
+3. `npm run db:setup` applies `supabase/migrations`, creates the super admin from `SUPER_ADMIN_EMAIL` /
+   `SUPER_ADMIN_PASSWORD`, and runs `db:check`. Re-running is safe and never resets a changed password.
+4. Sign in at `/sign-in`. An account seeded with a temporary password is sent to `/admin/password` until it is changed.
+
+How it is secured:
+
+- **Row Level Security everywhere.** `public.profiles` is deny-by-default: anonymous visitors get nothing, users read their
+  own row and may edit only their name, admins read all rows. Roles cannot be changed through the API.
+- **No keys in the browser.** All auth runs in Server Actions with the publishable key; session cookies are `httpOnly`.
+  The secret key and database URL are used only by the `db:*` scripts.
+- **`proxy.ts`** refreshes sessions and guards `/admin` only, so marketing and demo pages stay static. Pages and actions
+  re-check the user themselves (`lib/auth/session.ts`).
+- Password changes re-verify the current password; a database trigger clears the temporary-password flag only when the
+  stored hash actually changes. `?next=` redirects are limited to `/admin` paths.
+- `npm run db:check` proves it: it signs in a throwaway user, confirms they see only their own row and cannot promote
+  themselves, then deletes them.
 
 ## Routes
 
@@ -36,7 +61,9 @@ Requires Node 20+. The project uses **Next.js 16** (App Router, Cache Components
 | `/pricing`                                             | Illustrative pricing tiers and comparison                   |
 | `/resources`                                           | Demo guide, roadmap notes, links                            |
 | `/contact`, `/waitlist`                                | Validated forms (nothing is sent or stored)                 |
-| `/sign-in`, `/privacy`, `/terms`                       | Honest placeholders (no credential fields)                  |
+| `/sign-in`                                             | Email + password sign-in (Supabase Auth, no public sign-up)  |
+| `/admin`, `/admin/password`                            | Signed-in area: connection status, accounts, password change |
+| `/privacy`, `/terms`                                   | Honest placeholders                                         |
 | `/demo`                                                | Dashboard overview                                          |
 | `/demo/copilot`                                        | AI copilot (deterministic demo assistant)                   |
 | `/demo/crm`                                            | Contacts, leads, follow-ups                                 |
@@ -110,7 +137,7 @@ an industry selector, an onboarding preview, pricing, trust cards and an FAQ.
 - "Mark as paid", invoices and finance views are **illustrative**: no payments, bank connections, tax calculations or accounting.
 - The AI copilot is **rule-based and local**. It calls no model and says so in the UI.
 - Currency selection changes formatting only; amounts are not converted.
-- Pricing is illustrative and nothing can be purchased; forms validate and confirm but send nothing; there are no accounts.
+- Pricing is illustrative and nothing can be purchased; forms validate and confirm but send nothing.
 - No customer logos, testimonials, certifications or uptime claims are shown, because none exist.
 
 ## Accessibility, motion and performance
