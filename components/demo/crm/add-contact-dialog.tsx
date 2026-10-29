@@ -9,17 +9,19 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { DEMO_TODAY, addDays } from "@/lib/demo/dates";
+import { addDays } from "@/lib/demo/dates";
 import { contactSchema, type ContactFormInput, type ContactFormOutput } from "@/lib/demo/schemas";
 import { useDemoActions, useDemoData } from "@/lib/demo/store";
 import { CONTACT_STAGES } from "@/lib/demo/types";
 import { stageLabel } from "@/lib/demo/selectors";
+import { useIsDemo, useWorkspaceEnv } from "@/lib/workspace/context";
 
 const selectCls =
   "h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-card outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive";
 
 function Form({ onDone }: { onDone: () => void }) {
   const data = useDemoData();
+  const { today, selfId, mode } = useWorkspaceEnv();
   const actions = useDemoActions();
   const toast = useToast();
   const {
@@ -36,8 +38,9 @@ function Form({ onDone }: { onDone: () => void }) {
       jobTitle: "",
       stage: "new",
       dealValue: "",
-      followUpDate: addDays(DEMO_TODAY, 3),
-      ownerId: "tm-priya",
+      followUpDate: addDays(today, 3),
+      // The demo's contacts default to Priya's book; a member's own contacts default to themselves.
+      ownerId: mode === "demo" ? "tm-priya" : selfId,
       source: "Manual entry",
       notes: "",
     },
@@ -127,12 +130,13 @@ function Form({ onDone }: { onDone: () => void }) {
 }
 
 export function AddContactDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const demo = useIsDemo();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add contact</DialogTitle>
-          <DialogDescription>Saved locally in this demo. Name, company and email are required.</DialogDescription>
+          <DialogDescription>{demo ? "Saved locally in this demo. " : ""}Name, company and email are required.</DialogDescription>
         </DialogHeader>
         {open && <Form onDone={() => onOpenChange(false)} />}
       </DialogContent>

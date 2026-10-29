@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/demo/link";
 import { useState } from "react";
 import { ArrowRight, Check, FileText, Receipt, Truck, XCircle } from "lucide-react";
 
@@ -15,6 +15,7 @@ import { useMoney } from "@/lib/demo/settings";
 import { useDemoActions, useDemoLookups } from "@/lib/demo/store";
 import type { OrderStatus } from "@/lib/demo/types";
 import { cn } from "@/lib/utils";
+import { useIsDemo, useToday } from "@/lib/workspace/context";
 
 const FLOW: OrderStatus[] = ["pending", "processing", "shipped", "delivered"];
 const NEXT: Partial<Record<OrderStatus, OrderStatus>> = { pending: "processing", processing: "shipped", shipped: "delivered" };
@@ -23,7 +24,9 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
   const lookups = useDemoLookups();
   const actions = useDemoActions();
   const money = useMoney();
+  const today = useToday();
   const toast = useToast();
+  const demo = useIsDemo();
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const order = orderId ? lookups.orders.get(orderId) : undefined;
@@ -160,7 +163,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
                         <p className="text-xs text-muted-foreground">Due {formatDate(invoice.dueDate)}</p>
                       </div>
                     </div>
-                    <InvoiceStatusBadge status={invoiceDisplayStatus(invoice)} />
+                    <InvoiceStatusBadge status={invoiceDisplayStatus(invoice, today)} />
                   </div>
                 ) : order.status === "cancelled" ? (
                   <p className="text-sm text-muted-foreground">No invoice, because the order was cancelled.</p>
@@ -173,7 +176,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
                       className="mt-2.5"
                       onClick={() => {
                         const r = actions.createInvoiceForOrder(order.id);
-                        if (r.ok) toast.success(`Invoice ${r.value.number} created`, "Linked to this order. Demo only: no accounting entry was made.");
+                        if (r.ok) toast.success(`Invoice ${r.value.number} created`, demo ? "Linked to this order. Demo only: no accounting entry was made." : "Linked to this order.");
                         else toast.error("Could not create invoice", r.error);
                       }}
                     >

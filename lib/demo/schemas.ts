@@ -124,3 +124,22 @@ export const waitlistSchema = z.object({
   interest: z.string().trim().max(500, "Please keep it under 500 characters"),
 });
 export type WaitlistValues = z.input<typeof waitlistSchema>;
+
+export const projectSchema = z.object({
+  name: requiredText("Project name", 80),
+  customerId: z.string(),
+  status: z.enum(["active", "planning"]),
+});
+export type ProjectFormInput = z.input<typeof projectSchema>;
+export type ProjectFormOutput = z.output<typeof projectSchema>;
+
+export const teamMemberSchema = z.object({
+  name: requiredText("Name", 60),
+  role: z.string().trim().max(60, "Role must be 60 characters or fewer"),
+  email: z
+    .string()
+    .trim()
+    .max(120, "Email is too long")
+    .refine((v) => v === "" || z.email().safeParse(v).success, "Enter a valid email address"),
+});
+export type TeamMemberFormInput = z.input<typeof teamMemberSchema>;

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/demo/link";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,13 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DEMO_TODAY, addDays, diffDays, formatDate, monthKey, relativeDay } from "@/lib/demo/dates";
+import { addDays, diffDays, formatDate, monthKey, relativeDay } from "@/lib/demo/dates";
 import { expenseSchema, type ExpenseFormInput, type ExpenseFormOutput } from "@/lib/demo/schemas";
 import { computeMetrics, invoiceAging, invoiceDisplayStatus, monthlyTrend, type InvoiceDisplayStatus } from "@/lib/demo/selectors";
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoActions, useDemoData, useDemoLookups, useOpenRecord } from "@/lib/demo/store";
 import { EXPENSE_CATEGORIES, type Expense, type Invoice } from "@/lib/demo/types";
 import { cn } from "@/lib/utils";
+import { useIsDemo, useToday } from "@/lib/workspace/context";
 
 type StatusFilter = "all" | InvoiceDisplayStatus;
 
@@ -29,6 +30,8 @@ const AGING_TONE = ["bg-chart-3", "bg-chart-4", "bg-warning", "bg-danger"] as co
 
 export function FinanceView() {
   const data = useDemoData();
+  const today = useToday();
+  const demo = useIsDemo();
   const lookups = useDemoLookups();
   const money = useMoney();
   const actions = useDemoActions();
@@ -41,29 +44,29 @@ export function FinanceView() {
   const [expCategory, setExpCategory] = useState("all");
   const [expenseOpen, setExpenseOpen] = useState(false);
 
-  const m = useMemo(() => computeMetrics(data), [data]);
-  const aging = useMemo(() => invoiceAging(data), [data]);
+  const m = useMemo(() => computeMetrics(data, today), [data, today]);
+  const aging = useMemo(() => invoiceAging(data, today), [data, today]);
   const agingTotal = aging.reduce((s, b) => s + b.amount, 0);
-  const trend = useMemo(() => monthlyTrend(data, 12), [data]);
-  const thisMonth = monthKey(DEMO_TODAY);
+  const trend = useMemo(() => monthlyTrend(data, 12, today), [data, today]);
+  const thisMonth = monthKey(today);
 
-  const dueSoon = data.invoices.filter((i) => i.status === "unpaid" && i.dueDate >= DEMO_TODAY && i.dueDate <= addDays(DEMO_TODAY, 7));
+  const dueSoon = data.invoices.filter((i) => i.status === "unpaid" && i.dueDate >= today && i.dueDate <= addDays(today, 7));
   const collected = data.invoices.filter((i) => i.paidDate && monthKey(i.paidDate) === thisMonth).reduce((s, i) => s + i.amount, 0);
   const expensesMonth = data.expenses.filter((e) => monthKey(e.date) === thisMonth).reduce((s, e) => s + e.amount, 0);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: data.invoices.length, paid: 0, unpaid: 0, overdue: 0 };
-    for (const i of data.invoices) c[invoiceDisplayStatus(i)] += 1;
+    for (const i of data.invoices) c[invoiceDisplayStatus(i, today)] += 1;
     return c;
-  }, [data.invoices]);
+  }, [data.invoices, today]);
 
   const invoiceRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return data.invoices.filter((i) => {
-      if (status !== "all" && invoiceDisplayStatus(i) !== status) return false;
+      if (status !== "all" && invoiceDisplayStatus(i, today) !== status) return false;
       return !q || i.number.toLowerCase().includes(q) || (lookups.contacts.get(i.customerId)?.company.toLowerCase().includes(q) ?? false);
     });
-  }, [data.invoices, lookups.contacts, query, status]);
+  }, [data.invoices, lookups.contacts, query, status, today]);
 
   const expenseRows = useMemo(() => {
     const q = expQuery.trim().toLowerCase();
@@ -73,7 +76,7 @@ export function FinanceView() {
 
   function pay(inv: Invoice) {
     actions.markInvoicePaid(inv.id);
-    toast.success(`${inv.number} marked as paid`, "Demo only: no payment was processed and no bank was contacted.");
+    toast.success(`${inv.number} marked as paid`, demo ? "Demo only: no payment was processed and no bank was contacted." : "Recorded as paid. OrbitOS doesn't process payments or contact banks.");
   }
 
   const invoiceColumns: Column<Invoice>[] = [
@@ -86,15 +89,15 @@ export function FinanceView() {
       hideBelow: "sm",
       sortValue: (i) => i.dueDate,
       cell: (i) => {
-        const s = invoiceDisplayStatus(i);
+        const s = invoiceDisplayStatus(i, today);
         return (
           <span className={cn("whitespace-nowrap", s === "overdue" ? "font-medium text-danger" : "text-muted-foreground")}>
-            {i.status === "paid" ? formatDate(i.dueDate) : `${relativeDay(i.dueDate)}`}
+            {i.status === "paid" ? formatDate(i.dueDate) : `${relativeDay(i.dueDate, today)}`}
           </span>
         );
       },
     },
-    { key: "status", header: "Status", sortValue: (i) => invoiceDisplayStatus(i), cell: (i) => <InvoiceStatusBadge status={invoiceDisplayStatus(i)} /> },
+    { key: "status", header: "Status", sortValue: (i) => invoiceDisplayStatus(i, today), cell: (i) => <InvoiceStatusBadge status={invoiceDisplayStatus(i, today)} /> },
     { key: "amount", header: "Amount", align: "right", sortValue: (i) => i.amount, cell: (i) => <span className="font-semibold">{money.full(i.amount)}</span> },
     {
       key: "action",
@@ -114,7 +117,7 @@ export function FinanceView() {
             <BadgeCheck /> <span className="hidden sm:inline">Mark paid</span>
           </Button>
         ) : (
-          <span className="text-xs text-muted-foreground">{i.paidDate ? `Paid ${relativeDay(i.paidDate).toLowerCase()}` : ""}</span>
+          <span className="text-xs text-muted-foreground">{i.paidDate ? `Paid ${relativeDay(i.paidDate, today).toLowerCase()}` : ""}</span>
         ),
     },
   ];
@@ -140,9 +143,15 @@ export function FinanceView() {
           </Button>
         }
       />
-      <DemoNotice className="mb-6">
-        <strong>Demo module with illustrative figures.</strong> No payments, bank connectivity, tax calculations or certified accounting are implemented. “Mark as paid” only changes a record in your browser.
-      </DemoNotice>
+      {demo ? (
+        <DemoNotice className="mb-6">
+          <strong>Demo module with illustrative figures.</strong> No payments, bank connectivity, tax calculations or certified accounting are implemented. “Mark as paid” only changes a record in your browser.
+        </DemoNotice>
+      ) : (
+        <p className="mb-6 rounded-xl bg-muted px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
+          <strong className="text-foreground">Records only.</strong> OrbitOS keeps your invoices and expenses but doesn&apos;t process payments, connect to banks or calculate tax. “Mark as paid” updates the record.
+        </p>
+      )}
 
       <section aria-label="Finance summary" className="grid grid-cols-2 gap-4 xl:grid-cols-5">
         <StatCard label="Outstanding receivables" value={money.full(m.outstandingTotal)} hint={`${m.outstandingCount} unpaid invoices`} icon={<Wallet />} />
@@ -181,7 +190,7 @@ export function FinanceView() {
           </ul>
           <p className="mt-5 flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
             <Landmark className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            Ageing is measured from each invoice&apos;s due date against {formatDate(DEMO_TODAY)}.
+            Ageing is measured from each invoice&apos;s due date against {formatDate(today)}.
           </p>
         </Card>
       </div>
@@ -257,7 +266,7 @@ export function FinanceView() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
-                  {openInvoice.number} <InvoiceStatusBadge status={invoiceDisplayStatus(openInvoice)} />
+                  {openInvoice.number} <InvoiceStatusBadge status={invoiceDisplayStatus(openInvoice, today)} />
                 </DialogTitle>
                 <DialogDescription>{lookups.contacts.get(openInvoice.customerId)?.company}</DialogDescription>
               </DialogHeader>
@@ -265,7 +274,7 @@ export function FinanceView() {
                 items={[
                   { label: "Amount", value: <span className="text-base font-semibold tabular-nums">{money.full(openInvoice.amount)}</span> },
                   { label: "Issued", value: formatDate(openInvoice.issueDate) },
-                  { label: "Due", value: `${formatDate(openInvoice.dueDate)}${openInvoice.status === "unpaid" ? ` (${diffDays(openInvoice.dueDate, DEMO_TODAY) < 0 ? `${Math.abs(diffDays(openInvoice.dueDate, DEMO_TODAY))} days overdue` : relativeDay(openInvoice.dueDate).toLowerCase()})` : ""}` },
+                  { label: "Due", value: `${formatDate(openInvoice.dueDate)}${openInvoice.status === "unpaid" ? ` (${diffDays(openInvoice.dueDate, today) < 0 ? `${Math.abs(diffDays(openInvoice.dueDate, today))} days overdue` : relativeDay(openInvoice.dueDate, today).toLowerCase()})` : ""}` },
                   { label: "Paid", value: openInvoice.paidDate ? formatDate(openInvoice.paidDate) : "Not yet" },
                   {
                     label: "Order",
@@ -302,6 +311,7 @@ export function FinanceView() {
 /* ----------------------------------------------------------- Add expense -- */
 
 function ExpenseForm({ onDone }: { onDone: () => void }) {
+  const today = useToday();
   const actions = useDemoActions();
   const toast = useToast();
   const money = useMoney();
@@ -311,7 +321,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
     formState: { errors, submitCount },
   } = useForm<ExpenseFormInput, unknown, ExpenseFormOutput>({
     resolver: zodResolver(expenseSchema),
-    defaultValues: { date: DEMO_TODAY, category: "Software", vendor: "", description: "", amount: "" },
+    defaultValues: { date: today, category: "Software", vendor: "", description: "", amount: "" },
     mode: "onTouched",
   });
   const errorCount = Object.keys(errors).length;
@@ -367,12 +377,13 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
 }
 
 function AddExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const demo = useIsDemo();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add expense</DialogTitle>
-          <DialogDescription>Recorded locally in this demo. It appears in the expense list and the trend chart.</DialogDescription>
+          <DialogDescription>{demo ? "Recorded locally in this demo. " : ""}It appears in the expense list and the trend chart.</DialogDescription>
         </DialogHeader>
         {open && <ExpenseForm onDone={() => onOpenChange(false)} />}
       </DialogContent>

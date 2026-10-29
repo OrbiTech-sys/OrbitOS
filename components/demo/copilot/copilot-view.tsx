@@ -8,11 +8,13 @@ import { CopilotChat } from "@/components/shared/copilot-chat";
 import { SUGGESTED_PROMPTS } from "@/lib/demo/copilot";
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoData } from "@/lib/demo/store";
+import { useIsDemo } from "@/lib/workspace/context";
 
 export function CopilotView() {
   const data = useDemoData();
   const money = useMoney();
   const openRecord = useRecordNav();
+  const demo = useIsDemo();
 
   const sources = [
     { label: "Contacts", n: data.contacts.length },
@@ -27,9 +29,18 @@ export function CopilotView() {
   return (
     <>
       <PageHeader title="AI Copilot" description="Ask about your business in plain language. Answers are built from the live records in this workspace, with links to act on them." />
-      <DemoNotice className="mb-6">
-        <strong>Demo assistant.</strong> It is deterministic and rule-based, runs entirely in your browser and calls no AI service. It understands the suggested questions and close variations of them.
-      </DemoNotice>
+      {demo ? (
+        <DemoNotice className="mb-6">
+          <strong>Demo assistant.</strong> It is deterministic and rule-based, runs entirely in your browser and calls no AI service. It understands the suggested questions and close variations of them.
+        </DemoNotice>
+      ) : (
+        <p className="mb-6 flex items-start gap-2 rounded-xl bg-muted px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            <strong className="text-foreground">Rule-based assistant.</strong> It runs in your browser, reads only your own records and calls no AI service. It understands the suggested questions and close variations of them.
+          </span>
+        </p>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <CopilotChat data={data} money={money} onOpenRecord={openRecord} height="h-[calc(100dvh-17rem)] min-h-[34rem]" />

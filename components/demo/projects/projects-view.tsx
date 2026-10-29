@@ -1,25 +1,28 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ClipboardCheck, ListTodo, Plus, TriangleAlert } from "lucide-react";
+import { Check, ClipboardCheck, FolderPlus, ListTodo, Plus, TriangleAlert } from "lucide-react";
 
+import { AddProjectDialog } from "@/components/demo/projects/add-project-dialog";
 import { AddTaskDialog } from "@/components/demo/projects/add-task-dialog";
 import { useToast } from "@/components/demo/toast";
 import { Card, DataTable, EmptyState, FilterChips, PageHeader, SearchField, SelectField, StatCard, type Column } from "@/components/demo/ui";
 import { Avatar, PriorityBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DEMO_TODAY, diffDays, formatDate, relativeDay } from "@/lib/demo/dates";
+import { diffDays, formatDate, relativeDay } from "@/lib/demo/dates";
 import { computeMetrics, isTaskOverdue } from "@/lib/demo/selectors";
 import { useDemoActions, useDemoData, useDemoLookups, useOpenRecord } from "@/lib/demo/store";
 import { TASK_PRIORITIES, TASK_STATUSES, type Task, type TaskStatus } from "@/lib/demo/types";
 import { cn } from "@/lib/utils";
+import { useToday } from "@/lib/workspace/context";
 
 type StatusFilter = "all" | TaskStatus;
 const STATUS_LABEL: Record<TaskStatus, string> = { todo: "To do", in_progress: "In progress", done: "Done" };
 
 export function ProjectsView() {
   const data = useDemoData();
+  const today = useToday();
   const lookups = useDemoLookups();
   const actions = useDemoActions();
   const toast = useToast();
@@ -32,10 +35,11 @@ export function ProjectsView() {
   const [priority, setPriority] = useState("all");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState(false);
 
-  const m = useMemo(() => computeMetrics(data), [data]);
+  const m = useMemo(() => computeMetrics(data, today), [data, today]);
   const openCount = data.tasks.filter((t) => t.status !== "done").length;
-  const doneThisWeek = data.tasks.filter((t) => t.completedDate && diffDays(DEMO_TODAY, t.completedDate) <= 7).length;
+  const doneThisWeek = data.tasks.filter((t) => t.completedDate && diffDays(today, t.completedDate) <= 7).length;
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: data.tasks.length, todo: 0, in_progress: 0, done: 0 };
@@ -59,10 +63,10 @@ export function ProjectsView() {
       if (project !== "all" && t.projectId !== project) return false;
       if (assignee !== "all" && t.assigneeId !== assignee) return false;
       if (priority !== "all" && t.priority !== priority) return false;
-      if (overdueOnly && !isTaskOverdue(t)) return false;
+      if (overdueOnly && !isTaskOverdue(t, today)) return false;
       return !q || t.title.toLowerCase().includes(q) || (lookups.projects.get(t.projectId)?.name.toLowerCase().includes(q) ?? false);
     });
-  }, [data.tasks, lookups.projects, query, status, project, assignee, priority, overdueOnly]);
+  }, [data.tasks, lookups.projects, query, status, project, assignee, priority, overdueOnly, today]);
 
   function setTaskStatus(task: Task, next: TaskStatus) {
     actions.setTaskStatus(task.id, next);
@@ -155,8 +159,8 @@ export function ProjectsView() {
       // Open tasks sort by due date; completed tasks always sink to the bottom.
       sortValue: (t) => (t.status === "done" ? `z${t.dueDate}` : t.dueDate),
       cell: (t) => (
-        <span className={cn("whitespace-nowrap", isTaskOverdue(t) ? "font-semibold text-danger" : t.dueDate === DEMO_TODAY && t.status !== "done" ? "font-semibold text-warning" : "text-muted-foreground")}>
-          {t.status === "done" ? "Done" : relativeDay(t.dueDate)}
+        <span className={cn("whitespace-nowrap", isTaskOverdue(t, today) ? "font-semibold text-danger" : t.dueDate === today && t.status !== "done" ? "font-semibold text-warning" : "text-muted-foreground")}>
+          {t.status === "done" ? "Done" : relativeDay(t.dueDate, today)}
         </span>
       ),
     },
@@ -170,9 +174,14 @@ export function ProjectsView() {
         title="Projects & tasks"
         description="Plan work, assign owners and mark tasks complete. Dashboard counts and notifications follow along."
         actions={
-          <Button onClick={() => setAddOpen(true)}>
-            <Plus /> Add task
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => setProjectOpen(true)}>
+              <FolderPlus /> New project
+            </Button>
+            <Button onClick={() => setAddOpen(true)}>
+              <Plus /> Add task
+            </Button>
+          </>
         }
       />
 
@@ -183,6 +192,7 @@ export function ProjectsView() {
         <StatCard label="Completed this week" value={String(doneThisWeek)} hint="Last 7 days" tone="success" icon={<Check />} />
       </section>
 
+      {projectStats.length > 0 && (
       <section aria-label="Projects" className="mb-6">
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {projectStats.map(({ project: p, total, done }) => {
@@ -218,6 +228,7 @@ export function ProjectsView() {
           })}
         </ul>
       </section>
+      )}
 
       <Card bodyClassName="p-0">
         <div className="space-y-3 border-b p-4">
@@ -300,7 +311,7 @@ export function ProjectsView() {
                   ["Status", STATUS_LABEL[openTask.status]],
                   ["Priority", openTask.priority],
                   ["Assignee", lookups.team.get(openTask.assigneeId)?.name ?? "—"],
-                  ["Due", `${formatDate(openTask.dueDate)}${isTaskOverdue(openTask) ? " (overdue)" : ""}`],
+                  ["Due", `${formatDate(openTask.dueDate)}${isTaskOverdue(openTask, today) ? " (overdue)" : ""}`],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-3 px-3.5 py-2.5">
                     <dt className="text-muted-foreground">{k}</dt>
@@ -329,7 +340,16 @@ export function ProjectsView() {
         </DialogContent>
       </Dialog>
 
-      <AddTaskDialog open={addOpen} onOpenChange={setAddOpen} defaultProjectId={project !== "all" ? project : undefined} />
+      <AddTaskDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        defaultProjectId={project !== "all" ? project : undefined}
+        onCreateProject={() => {
+          setAddOpen(false);
+          setProjectOpen(true);
+        }}
+      />
+      <AddProjectDialog open={projectOpen} onOpenChange={setProjectOpen} />
     </>
   );
 }

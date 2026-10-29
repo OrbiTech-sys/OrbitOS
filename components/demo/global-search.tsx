@@ -1,20 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useDemoRouter } from "@/components/demo/link";
 import { CornerDownLeft, Search } from "lucide-react";
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { SEARCH_GROUP_LABEL, searchAll, type SearchResult } from "@/lib/demo/search";
 import { useDemoActions, useDemoData } from "@/lib/demo/store";
 import { useMoney } from "@/lib/demo/settings";
+import { useIsDemo } from "@/lib/workspace/context";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav";
 
 export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const router = useRouter();
+  const router = useDemoRouter();
   const data = useDemoData();
   const money = useMoney();
+  const demo = useIsDemo();
   const actions = useDemoActions();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -61,7 +63,7 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
       }}
     >
       <DialogContent showCloseButton={false} className="top-[10vh] translate-y-0 gap-0 p-0 sm:max-w-xl">
-        <DialogTitle className="sr-only">Search the demo workspace</DialogTitle>
+        <DialogTitle className="sr-only">{demo ? "Search the demo workspace" : "Search your workspace"}</DialogTitle>
         <DialogDescription className="sr-only">Search contacts, orders, invoices, quotations, products and tasks. Use the arrow keys to move and Enter to open.</DialogDescription>
         <div className="flex items-center gap-3 border-b px-4">
           <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -71,7 +73,7 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
             aria-expanded={results.length > 0}
             aria-controls="global-search-results"
             aria-activedescendant={results.length ? `gs-${safeActive}` : undefined}
-            aria-label="Search the demo workspace"
+            aria-label={demo ? "Search the demo workspace" : "Search your workspace"}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);

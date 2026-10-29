@@ -8,10 +8,11 @@ import { SalesDocDialog } from "@/components/demo/sales-doc-dialog";
 import { Card, DataTable, EmptyState, FilterChips, PageHeader, SearchField, SelectField, type Column } from "@/components/demo/ui";
 import { OrderStatusBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
-import { DEMO_TODAY, addDays, formatDate, monthKey } from "@/lib/demo/dates";
+import { addDays, formatDate, monthKey } from "@/lib/demo/dates";
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoActions, useDemoData, useDemoLookups, useOpenRecord } from "@/lib/demo/store";
 import type { Order, OrderStatus } from "@/lib/demo/types";
+import { useToday } from "@/lib/workspace/context";
 
 type StatusFilter = "all" | OrderStatus;
 type DateFilter = "all" | "month" | "30d";
@@ -20,6 +21,7 @@ export function OrdersView() {
   const data = useDemoData();
   const lookups = useDemoLookups();
   const money = useMoney();
+  const today = useToday();
   const actions = useDemoActions();
   const openId = useOpenRecord("order");
 
@@ -38,12 +40,12 @@ export function OrdersView() {
     const q = query.trim().toLowerCase();
     return data.orders.filter((o) => {
       if (status !== "all" && o.status !== status) return false;
-      if (range === "month" && monthKey(o.date) !== monthKey(DEMO_TODAY)) return false;
-      if (range === "30d" && o.date < addDays(DEMO_TODAY, -30)) return false;
+      if (range === "month" && monthKey(o.date) !== monthKey(today)) return false;
+      if (range === "30d" && o.date < addDays(today, -30)) return false;
       if (!q) return true;
       return o.number.toLowerCase().includes(q) || (lookups.contacts.get(o.customerId)?.company.toLowerCase().includes(q) ?? false);
     });
-  }, [data.orders, lookups.contacts, query, status, range]);
+  }, [data.orders, lookups.contacts, query, status, range, today]);
 
   const columns: Column<Order>[] = [
     { key: "number", header: "Order", primary: true, cell: (o) => o.number, sortValue: (o) => o.number },

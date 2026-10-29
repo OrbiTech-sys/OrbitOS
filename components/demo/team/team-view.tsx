@@ -1,18 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
-import { Briefcase, ClipboardList, Mail, TriangleAlert } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Briefcase, ClipboardList, Mail, TriangleAlert, UserPlus } from "lucide-react";
 
 import { Card, DemoNotice, PageHeader } from "@/components/demo/ui";
+import { AddMemberDialog } from "@/components/demo/team/add-member-dialog";
 import { Avatar } from "@/components/shared/badges";
-import { DEMO_TODAY, monthKey } from "@/lib/demo/dates";
+import { Button } from "@/components/ui/button";
+import { monthKey } from "@/lib/demo/dates";
 import { OPEN_STAGES, isTaskOverdue } from "@/lib/demo/selectors";
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoData } from "@/lib/demo/store";
+import { useIsDemo, useToday } from "@/lib/workspace/context";
 
 export function TeamView() {
   const data = useDemoData();
   const money = useMoney();
+  const today = useToday();
+  const demo = useIsDemo();
+  const [addOpen, setAddOpen] = useState(false);
 
   const stats = useMemo(
     () =>
@@ -21,11 +27,11 @@ export function TeamView() {
         const open = tasks.filter((t) => t.status !== "done");
         const accounts = data.contacts.filter((c) => c.ownerId === member.id && c.stage === "customer");
         const deals = data.contacts.filter((c) => c.ownerId === member.id && OPEN_STAGES.includes(c.stage));
-        const orders = data.orders.filter((o) => o.createdById === member.id && o.status !== "cancelled" && monthKey(o.date) === monthKey(DEMO_TODAY));
+        const orders = data.orders.filter((o) => o.createdById === member.id && o.status !== "cancelled" && monthKey(o.date) === monthKey(today));
         return {
           member,
           open: open.length,
-          overdue: tasks.filter((t) => isTaskOverdue(t)).length,
+          overdue: tasks.filter((t) => isTaskOverdue(t, today)).length,
           accounts: accounts.length,
           deals: deals.length,
           dealValue: deals.reduce((s, c) => s + c.dealValue, 0),
@@ -34,14 +40,22 @@ export function TeamView() {
           projects: data.projects.filter((p) => p.ownerId === member.id).length,
         };
       }),
-    [data],
+    [data, today],
   );
   const maxOpen = Math.max(1, ...stats.map((s) => s.open));
 
   return (
     <>
-      <PageHeader title="Team" description="Who owns what: accounts, deals, projects and tasks, calculated from the sample records." />
-      <DemoNotice className="mb-6">Roles and permissions are not implemented in this proof of concept. This is a read-only overview of ownership and workload.</DemoNotice>
+      <PageHeader title="Team" description={`Who owns what: accounts, deals, projects and tasks, calculated from ${demo ? "the sample" : "your"} records.`}
+        actions={
+          !demo && (
+            <Button onClick={() => setAddOpen(true)}>
+              <UserPlus /> Add team member
+            </Button>
+          )
+        }
+      />
+      {demo && <DemoNotice className="mb-6">Roles and permissions are not implemented in this proof of concept. This is a read-only overview of ownership and workload.</DemoNotice>}
 
       <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {stats.map((s) => (
@@ -122,6 +136,8 @@ export function TeamView() {
             ))}
         </ul>
       </Card>
+
+      {!demo && <AddMemberDialog open={addOpen} onOpenChange={setAddOpen} />}
     </>
   );
 }

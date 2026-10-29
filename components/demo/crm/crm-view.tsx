@@ -8,12 +8,13 @@ import { ContactDrawer } from "@/components/demo/crm/contact-drawer";
 import { Card, DataTable, EmptyState, FilterChips, PageHeader, SearchField, StatCard, type Column } from "@/components/demo/ui";
 import { Avatar, StageBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
-import { DEMO_TODAY, relativeDay } from "@/lib/demo/dates";
+import { relativeDay } from "@/lib/demo/dates";
 import { OPEN_STAGES, followUpsDue, stageLabel } from "@/lib/demo/selectors";
 import { useMoney } from "@/lib/demo/settings";
 import { useDemoActions, useDemoData, useDemoLookups, useOpenRecord } from "@/lib/demo/store";
 import { CONTACT_STAGES, type Contact, type ContactStage } from "@/lib/demo/types";
 import { cn } from "@/lib/utils";
+import { useIsDemo, useToday } from "@/lib/workspace/context";
 
 type StageFilter = "all" | ContactStage;
 
@@ -21,6 +22,8 @@ export function CrmView() {
   const data = useDemoData();
   const lookups = useDemoLookups();
   const money = useMoney();
+  const today = useToday();
+  const demo = useIsDemo();
   const actions = useDemoActions();
   const openId = useOpenRecord("contact");
 
@@ -35,7 +38,7 @@ export function CrmView() {
     return c;
   }, [data.contacts]);
 
-  const due = useMemo(() => followUpsDue(data), [data]);
+  const due = useMemo(() => followUpsDue(data, today), [data, today]);
   const pipeline = data.contacts.filter((c) => OPEN_STAGES.includes(c.stage)).reduce((s, c) => s + c.dealValue, 0);
 
   const rows = useMemo(() => {
@@ -65,7 +68,7 @@ export function CrmView() {
     { key: "company", header: "Company", hideBelow: "sm", sortValue: (c) => c.company, cell: (c) => c.company },
     { key: "stage", header: "Lead status", sortValue: (c) => CONTACT_STAGES.indexOf(c.stage), cell: (c) => <StageBadge stage={c.stage} /> },
     { key: "value", header: "Deal value", align: "right", hideBelow: "md", sortValue: (c) => c.dealValue, cell: (c) => (c.dealValue ? money.full(c.dealValue) : "—") },
-    { key: "last", header: "Last contact", hideBelow: "lg", sortValue: (c) => c.lastContact, cell: (c) => <span className="text-muted-foreground">{relativeDay(c.lastContact)}</span> },
+    { key: "last", header: "Last contact", hideBelow: "lg", sortValue: (c) => c.lastContact, cell: (c) => <span className="text-muted-foreground">{relativeDay(c.lastContact, today)}</span> },
     {
       key: "follow",
       header: "Follow-up",
@@ -73,9 +76,9 @@ export function CrmView() {
       sortValue: (c) => c.followUpDate ?? "9999",
       cell: (c) =>
         c.followUpDate && c.stage !== "lost" ? (
-          <span className={cn("inline-flex items-center gap-1.5", c.followUpDate <= DEMO_TODAY ? "font-medium text-warning" : "text-muted-foreground")}>
+          <span className={cn("inline-flex items-center gap-1.5", c.followUpDate <= today ? "font-medium text-warning" : "text-muted-foreground")}>
             <CalendarClock className="size-3.5" aria-hidden="true" />
-            {relativeDay(c.followUpDate)}
+            {relativeDay(c.followUpDate, today)}
           </span>
         ) : (
           <span className="text-muted-foreground/60">—</span>
@@ -88,7 +91,7 @@ export function CrmView() {
     <>
       <PageHeader
         title="CRM"
-        description="Contacts, leads and follow-ups. Search, filter by stage, update a lead's status or add a new contact; everything saves locally."
+        description={demo ? "Contacts, leads and follow-ups. Search, filter by stage, update a lead's status or add a new contact; everything saves locally." : "Contacts, leads and follow-ups. Search, filter by stage, update a lead's status or add a new contact."}
         actions={
           <Button onClick={() => setAddOpen(true)}>
             <UserPlus /> Add contact

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/demo/link";
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, Boxes, CircleDollarSign, ClipboardCheck, PackageOpen, Plus, Receipt, Target, UserPlus } from "lucide-react";
 
@@ -12,11 +12,12 @@ import { useRecordNav } from "@/components/demo/use-record-nav";
 import { Avatar, OrderStatusBadge } from "@/components/shared/badges";
 import { RevenueTrendChart } from "@/components/shared/charts";
 import { Button } from "@/components/ui/button";
-import { DEMO_TODAY, formatDate, formatShortDate, relativeActivity } from "@/lib/demo/dates";
+import { formatDate, formatShortDate, relativeActivity } from "@/lib/demo/dates";
 import { computeMetrics, indexById, monthlyTrend } from "@/lib/demo/selectors";
 import { useMoney, useSettings } from "@/lib/demo/settings";
 import { useDemoData } from "@/lib/demo/store";
 import { cn } from "@/lib/utils";
+import { useToday, useWorkspaceEnv } from "@/lib/workspace/context";
 
 const KIND_DOT: Record<string, string> = {
   order: "bg-primary",
@@ -34,17 +35,19 @@ export function OverviewView() {
   const data = useDemoData();
   const money = useMoney();
   const settings = useSettings();
+  const today = useToday();
+  const { mode, selfId } = useWorkspaceEnv();
   const openRecord = useRecordNav();
   const [range, setRange] = useState<6 | 12>(12);
   const [orderOpen, setOrderOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
 
-  const m = useMemo(() => computeMetrics(data), [data]);
-  const points = useMemo(() => monthlyTrend(data, range), [data, range]);
+  const m = useMemo(() => computeMetrics(data, today), [data, today]);
+  const points = useMemo(() => monthlyTrend(data, range, today), [data, range, today]);
   const people = useMemo(() => indexById(data.contacts), [data.contacts]);
   const team = useMemo(() => indexById(data.team), [data.team]);
   const recentOrders = useMemo(() => [...data.orders].sort((a, b) => (a.date === b.date ? (a.number < b.number ? 1 : -1) : a.date < b.date ? 1 : -1)).slice(0, 6), [data.orders]);
-  const first = data.team.find((t) => t.id === "tm-alex")?.name.split(" ")[0] ?? "there";
+  const first = data.team.find((t) => t.id === selfId)?.name.split(" ")[0] ?? "there";
 
   return (
     <>
@@ -52,7 +55,7 @@ export function OverviewView() {
         title={`Welcome back, ${first}`}
         description={
           <>
-            Here is how {settings.businessName} is doing on {formatDate(DEMO_TODAY)}. Every figure is calculated from the sample records.
+            Here is how {settings.businessName} is doing on {formatDate(today)}. Every figure is calculated from {mode === "demo" ? "the sample" : "your"} records.
           </>
         }
         actions={
@@ -177,7 +180,7 @@ export function OverviewView() {
                     <p className="text-[0.8125rem] leading-snug text-foreground">{a.message}</p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                       {a.actorId && team.get(a.actorId) && <Avatar member={team.get(a.actorId)!} size="sm" className="size-4 text-[0.5rem]" />}
-                      {relativeActivity(a.at)}
+                      {relativeActivity(a.at, today)}
                     </p>
                   </div>
                 </li>

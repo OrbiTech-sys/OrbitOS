@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useDemoPathname } from "@/components/demo/link";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { Logo, LogoMark } from "@/components/shared/logo";
@@ -9,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useDemoActions } from "@/lib/demo/store";
 import { useSettings } from "@/lib/demo/settings";
 import { cn } from "@/lib/utils";
+import { useWorkspaceEnv } from "@/lib/workspace/context";
 import { NAV_ITEMS } from "./nav";
 
 export function isActive(pathname: string, href: string) {
@@ -24,9 +24,10 @@ export function SidebarContent({
   onNavigate?: () => void;
   onToggleCollapse?: () => void;
 }) {
-  const pathname = usePathname();
+  const pathname = useDemoPathname();
   const settings = useSettings();
   const { closeRecord } = useDemoActions();
+  const { mode } = useWorkspaceEnv();
   const items = NAV_ITEMS.filter((n) => n.module === null || settings.modules[n.module]);
 
   return (
@@ -37,7 +38,7 @@ export function SidebarContent({
         </Link>
       </div>
 
-      <nav aria-label="Demo modules" className="scrollbar-thin flex-1 overflow-y-auto px-3 py-4">
+      <nav aria-label={mode === "demo" ? "Demo modules" : "Modules"} className="scrollbar-thin flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-0.5">
           {items.map((item) => {
             const active = isActive(pathname, item.href);
@@ -80,7 +81,7 @@ export function SidebarContent({
         {!collapsed && (
           <div className="mb-3 rounded-lg bg-sidebar-accent px-3 py-2.5">
             <p className="truncate text-xs font-semibold text-white">{settings.businessName}</p>
-            <p className="mt-0.5 text-[0.6875rem] leading-snug text-sidebar-foreground/70">Demo workspace · fictional sample data</p>
+            <p className="mt-0.5 text-[0.6875rem] leading-snug text-sidebar-foreground/70">{mode === "demo" ? "Demo workspace · fictional sample data" : "Your workspace"}</p>
           </div>
         )}
         {onToggleCollapse && (

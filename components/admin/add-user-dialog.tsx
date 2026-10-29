@@ -15,8 +15,8 @@ export const selectClass =
   "h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-card outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive";
 
 export const ROLE_OPTIONS: Record<AppRole, string> = {
-  member: "Member: signs in, no admin access",
-  admin: "Admin: can add members",
+  member: "Member: uses their own workspace",
+  admin: "Admin: manages members",
   super_admin: "Super admin: full control",
 };
 

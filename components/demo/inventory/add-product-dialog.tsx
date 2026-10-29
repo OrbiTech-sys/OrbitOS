@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { productSchema, type ProductFormInput, type ProductFormOutput } from "@/lib/demo/schemas";
 import { useDemoActions } from "@/lib/demo/store";
+import { useIsDemo } from "@/lib/workspace/context";
 import { PRODUCT_CATEGORIES } from "@/lib/demo/types";
 
 const selectCls =
@@ -93,12 +94,13 @@ function Form({ onDone }: { onDone: () => void }) {
 }
 
 export function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const demo = useIsDemo();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Add product</DialogTitle>
-          <DialogDescription>Adds a product to the local demo catalog.</DialogDescription>
+          <DialogDescription>{demo ? "Adds a product to the local demo catalog." : "Adds a product to your catalog."}</DialogDescription>
         </DialogHeader>
         {open && <Form onDone={() => onOpenChange(false)} />}
       </DialogContent>

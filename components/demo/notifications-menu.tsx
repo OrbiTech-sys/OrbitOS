@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { Link, useDemoRouter } from "@/components/demo/link";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Bell, BellOff, CheckCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,19 +10,21 @@ import { buildNotifications, type DemoNotification } from "@/lib/demo/notificati
 import { useMoney, useSettings } from "@/lib/demo/settings";
 import { useDemoActions, useDemoData, useReadNotifications } from "@/lib/demo/store";
 import { cn } from "@/lib/utils";
+import { useToday } from "@/lib/workspace/context";
 
 const TONE = { danger: "bg-danger", warning: "bg-warning", info: "bg-info" } as const;
 
 export function NotificationsMenu() {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
+  const router = useDemoRouter();
   const data = useDemoData();
   const settings = useSettings();
   const money = useMoney();
+  const today = useToday();
   const read = useReadNotifications();
   const actions = useDemoActions();
 
-  const items = useMemo(() => buildNotifications(data, settings.notifications, money), [data, settings.notifications, money]);
+  const items = useMemo(() => buildNotifications(data, settings.notifications, money, today), [data, settings.notifications, money, today]);
   const unread = items.filter((n) => !read.includes(n.id));
 
   function openItem(n: DemoNotification) {
