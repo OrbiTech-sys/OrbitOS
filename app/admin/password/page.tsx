@@ -20,7 +20,7 @@ export default function PasswordPage() {
 }
 
 async function PasswordSection() {
-  const user = await requireUser();
+  const user = await requireUser({ allowTemporaryPassword: true });
 
   return (
     <>

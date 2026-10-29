@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { CheckCircle2, Database, KeyRound, LogOut, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, Database, History, ShieldCheck, Users } from "lucide-react";
 
 import { StatusBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
-import { signOut } from "@/lib/auth/actions";
-import { listAccounts } from "@/lib/auth/accounts";
+import { listAccounts, listAuditLog } from "@/lib/auth/accounts";
 import { ROLE_LABELS, isAdminRole, requireUser, type CurrentUser } from "@/lib/auth/session";
 
 export default function AdminPage({ searchParams }: PageProps<"/admin">) {
@@ -19,28 +17,13 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
 
 async function Overview({ searchParams }: Pick<PageProps<"/admin">, "searchParams">) {
   const user = await requireUser();
-  if (user.mustChangePassword) redirect("/admin/password");
   const { password } = await searchParams;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome, {user.fullName ?? user.email}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{user.email}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <Link href="/admin/password">
-              <KeyRound /> Change password
-            </Link>
-          </Button>
-          <form action={signOut}>
-            <Button type="submit" variant="ghost">
-              <LogOut /> Sign out
-            </Button>
-          </form>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Welcome, {user.fullName ?? user.email}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{user.email}</p>
       </div>
 
       {password === "updated" && (
@@ -55,15 +38,39 @@ async function Overview({ searchParams }: Pick<PageProps<"/admin">, "searchParam
         <section className="rounded-2xl border bg-card p-6 shadow-card">
           <h2 className="font-semibold">No admin access</h2>
           <p className="mt-1 text-sm text-muted-foreground">You&apos;re signed in as a member. Ask a super admin if you need access.</p>
+          <Button asChild variant="outline" className="mt-4">
+            <Link href="/demo">
+              Open the workspace <ArrowRight />
+            </Link>
+          </Button>
         </section>
       )}
     </div>
   );
 }
 
+const ACTION_LABELS: Record<string, string> = {
+  "user.created": "added",
+  "user.role_changed": "changed the role of",
+  "user.password_reset": "reset the password of",
+  "user.deactivated": "deactivated",
+  "user.reactivated": "reactivated",
+  "user.deleted": "deleted",
+};
+
+const when = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
+
 async function AdminPanels({ user }: { user: CurrentUser }) {
-  const { accounts, error, latencyMs } = await listAccounts();
+  const [{ accounts, error, latencyMs }, activity] = await Promise.all([listAccounts(), listAuditLog()]);
   const host = new URL(process.env.SUPABASE_URL!).host;
+  const count = (test: (a: (typeof accounts)[number]) => boolean) => accounts.filter(test).length;
+
+  const stats = [
+    { label: "Users", value: accounts.length },
+    { label: "Admins", value: count((a) => isAdminRole(a.role)) },
+    { label: "Temporary passwords", value: count((a) => a.must_change_password && !a.deactivated_at) },
+    { label: "Deactivated", value: count((a) => !!a.deactivated_at) },
+  ];
 
   return (
     <>
@@ -88,34 +95,52 @@ async function AdminPanels({ user }: { user: CurrentUser }) {
         </section>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border bg-card shadow-card">
-        <h2 className="border-b px-5 py-4 text-sm font-semibold">Accounts ({accounts.length})</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-5 py-2.5 font-medium">Email</th>
-                <th scope="col" className="px-5 py-2.5 font-medium">Role</th>
-                <th scope="col" className="px-5 py-2.5 font-medium">Password</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {accounts.map((a) => (
-                <tr key={a.id}>
-                  <td className="px-5 py-3">
-                    <span className="font-medium">{a.full_name ?? a.email}</span>
-                    {a.full_name && <span className="block text-xs text-muted-foreground">{a.email}</span>}
-                  </td>
-                  <td className="px-5 py-3">{ROLE_LABELS[a.role]}</td>
-                  <td className="px-5 py-3">
-                    {a.must_change_password ? <StatusBadge tone="warning">Temporary</StatusBadge> : <StatusBadge tone="success">Set</StatusBadge>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="rounded-2xl border bg-card p-5 shadow-card">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Users className="size-4 text-muted-foreground" aria-hidden="true" /> People
+          </h2>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/users">
+              Manage users <ArrowRight />
+            </Link>
+          </Button>
         </div>
+        <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {stats.map((s) => (
+            <div key={s.label}>
+              <dt className="text-xs text-muted-foreground">{s.label}</dt>
+              <dd className="mt-1 text-2xl font-semibold tabular-nums">{s.value}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
+
+      {user.role === "super_admin" && (
+        <section className="rounded-2xl border bg-card shadow-card">
+          <h2 className="flex items-center gap-2 border-b px-5 py-4 text-sm font-semibold">
+            <History className="size-4 text-muted-foreground" aria-hidden="true" /> Recent admin activity
+          </h2>
+          {activity.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-muted-foreground">Nothing yet. Adding or changing users is recorded here.</p>
+          ) : (
+            <ul className="divide-y text-sm">
+              {activity.map((entry) => (
+                <li key={entry.id} className="flex flex-col gap-0.5 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <span>
+                    <span className="font-medium">{entry.actor_email}</span> {ACTION_LABELS[entry.action] ?? entry.action}{" "}
+                    <span className="font-medium">{entry.target_email}</span>
+                    {entry.action === "user.role_changed" && ` (now ${ROLE_LABELS[entry.details.to as keyof typeof ROLE_LABELS] ?? entry.details.to})`}
+                  </span>
+                  <time dateTime={entry.created_at} className="shrink-0 text-xs text-muted-foreground">
+                    {when.format(new Date(entry.created_at))}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </>
   );
 }

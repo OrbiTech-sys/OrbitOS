@@ -10,13 +10,20 @@ import { Input } from "@/components/ui/input";
 import { signIn } from "@/lib/auth/actions";
 
 export function SignInForm() {
-  const next = useSearchParams().get("next") ?? "";
+  const params = useSearchParams();
+  const next = params.get("next") ?? "";
+  const sessionEnded = params.get("reason") === "session";
   const [state, formAction, pending] = useActionState(signIn, undefined);
   const emailError = state?.fieldErrors?.email?.[0];
   const passwordError = state?.fieldErrors?.password?.[0];
 
   return (
     <form action={formAction} noValidate className="space-y-5 text-left" aria-label="Sign in">
+      {sessionEnded && !state && (
+        <p role="status" className="rounded-lg bg-muted px-3.5 py-2.5 text-sm text-muted-foreground">
+          Your session has ended. Please sign in again.
+        </p>
+      )}
       {state?.error && (
         <p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-sm font-medium text-danger">
           {state.error}

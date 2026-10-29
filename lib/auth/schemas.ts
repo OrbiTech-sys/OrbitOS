@@ -26,3 +26,14 @@ export const changePasswordSchema = z
 export type FieldErrors = Partial<Record<string, string[]>>;
 
 export type AuthFormState = { error?: string; fieldErrors?: FieldErrors; email?: string } | undefined;
+
+export const addUserSchema = z.object({
+  fullName: z.string().trim().min(1, "Name is required").max(120, "Name must be 120 characters or fewer"),
+  email: z.string().trim().toLowerCase().min(1, "Email is required").pipe(z.email("Enter a valid email address")),
+  role: z.enum(["member", "admin", "super_admin"], "Choose a role"),
+});
+
+export type UserActionState =
+  | { ok: true; message: string; email?: string; tempPassword?: string }
+  | { ok: false; error?: string; fieldErrors?: FieldErrors; values?: Record<string, string> }
+  | undefined;

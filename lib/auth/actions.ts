@@ -23,8 +23,10 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) {
-    // One message for unknown email and wrong password, so accounts can't be probed.
     if (error.status === 429) return { email, error: "Too many attempts. Wait a minute and try again." };
+    // Supabase only reports a ban once the password is correct.
+    if (error.code === "user_banned") return { email, error: "This account has been deactivated. Contact your administrator." };
+    // One message for unknown email and wrong password, so accounts can't be probed.
     if (error.status === 400) return { email, error: "Email or password is incorrect." };
     return { email, error: "Sign-in is unavailable right now. Please try again shortly." };
   }
@@ -42,7 +44,8 @@ export async function signOut() {
 
 export async function changePassword(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
   const user = await getCurrentUser();
-  if (!user) redirect("/sign-in");
+  if (!user) redirect("/sign-in?reason=session");
+  if (!user.active) redirect("/admin/deactivated");
 
   const parsed = changePasswordSchema.safeParse({
     currentPassword: formData.get("currentPassword"),

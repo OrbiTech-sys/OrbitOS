@@ -2,12 +2,15 @@
 //
 //   1. Configuration   env vars present and plausible
 //   2. Database        Postgres reachable, migrations applied
-//   3. Hardening       RLS on every public table, anon locked out, role not writable
+//   3. Hardening       RLS on every public table, anon locked out, role not writable,
+//                      last super admin protected, audit log append-only
 //   4. APIs            Auth and REST reachable with the publishable key
 //   5. Super admin     exists, confirmed, has the role (and can sign in while the
 //                      default password is still in place)
 //   6. RLS in action   a throwaway user signs in and is checked against the
-//                      policies, then deleted
+//                      policies (including promotion and deactivation), then deleted
+//
+// Guard tests run inside transactions that are always rolled back.
 import { randomBytes } from "node:crypto";
 import { readdir } from "node:fs/promises";
 
@@ -22,6 +25,7 @@ const expect = (condition, pass, failMsg = pass) => {
   }
   return condition;
 };
+const ROLLBACK = Symbol("rollback");
 const ms = (start) => `${Math.round(performance.now() - start)} ms`;
 
 console.log("\nOrbitOS · Supabase check\n");
@@ -83,6 +87,43 @@ try {
     where tgrelid = 'auth.users'::regclass and tgname in ('on_auth_user_created', 'on_auth_user_updated')
   `;
   expect(triggers.length === 2, "Auth triggers installed (profile creation, password-change tracking)", "Auth triggers missing on auth.users");
+
+  const [auditPriv] = await sql`
+    select
+      has_table_privilege('anon', 'public.audit_log', 'select, insert, update, delete') as anon_any,
+      has_table_privilege('authenticated', 'public.audit_log', 'insert, update, delete') as auth_write
+  `;
+  expect(!auditPriv.anon_any && !auditPriv.auth_write, "Audit log is closed to visitors and read-only for users", "audit_log privileges are too broad");
+
+  // Runs a statement in a savepoint, then rolls the whole transaction back. Returns its error, if any.
+  const refused = async (statement) => {
+    let error = null;
+    await sql
+      .begin(async (tx) => {
+        error = await tx.savepoint((sp) => statement(sp)).then(() => null, (e) => e);
+        throw ROLLBACK;
+      })
+      .catch((e) => {
+        if (e !== ROLLBACK) throw e;
+      });
+    return error;
+  };
+
+  const demote = await refused((tx) => tx`update public.profiles set role = 'member' where role = 'super_admin'`);
+  expect(
+    demote?.message?.includes("at least one active super admin"),
+    "The last active super admin cannot be demoted or removed",
+    `Last super admin guard did not fire: ${demote?.message ?? "update was allowed (rolled back)"}`,
+  );
+
+  const tamper = await refused(async (tx) => {
+    const [row] = await tx`
+      insert into public.audit_log (actor_id, actor_email, action)
+      values (gen_random_uuid(), 'db-check', 'db.check') returning id
+    `;
+    await tx`update public.audit_log set action = 'tampered' where id = ${row.id}`;
+  });
+  expect(tamper?.message?.includes("append-only"), "Audit log entries cannot be edited or deleted", `Audit log tampering was not blocked: ${tamper?.message ?? "update was allowed (rolled back)"}`);
 
   console.log("\nAPIs");
   start = performance.now();
@@ -153,6 +194,16 @@ try {
       expect(escalate.error?.code === "42501", "Cannot promote themselves to super_admin", `Role escalation was not blocked: ${escalate.error?.message ?? "update succeeded"}`);
       const rename = await member.from("profiles").update({ full_name: "RLS check" }).eq("id", tempUserId).select("full_name");
       expect(rename.data?.[0]?.full_name === "RLS check", "Can update their own display name", `Display name update failed: ${rename.error?.message}`);
+
+      await sql`update public.profiles set role = 'admin' where id = ${tempUserId}`;
+      const asAdmin = await member.from("profiles").select("id");
+      expect((asAdmin.data?.length ?? 0) > 1, "Promoted to admin, sees every profile", `Admin saw ${asAdmin.data?.length ?? 0} profile(s)`);
+      const auditAsAdmin = await member.from("audit_log").select("id").limit(1);
+      expect(auditAsAdmin.data?.length === 0, "Admins cannot read the audit log", "An admin could read audit_log");
+
+      await sql`update public.profiles set deactivated_at = now() where id = ${tempUserId}`;
+      const deactivated = await member.from("profiles").select("id");
+      expect(deactivated.data?.length === 1, "Deactivation removes admin access at once, same session", `Deactivated admin still saw ${deactivated.data?.length} profile(s)`);
       await member.auth.signOut({ scope: "local" });
     }
   }

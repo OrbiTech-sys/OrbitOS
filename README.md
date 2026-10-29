@@ -36,13 +36,23 @@ Requires Node 22.9+ (the `db:*` scripts use `--env-file-if-exists`). The project
 3. `npm run db:setup` applies `supabase/migrations`, creates the super admin from `SUPER_ADMIN_EMAIL` /
    `SUPER_ADMIN_PASSWORD`, and runs `db:check`. Re-running is safe and never resets a changed password.
 4. Sign in at `/sign-in`. An account seeded with a temporary password is sent to `/admin/password` until it is changed.
+5. Add everyone else at `/admin/users`. Each new user gets a one-time temporary password (shown once, to share privately)
+   and must replace it at first sign-in. No email setup is needed.
+
+Who can do what (`lib/auth/permissions.ts`): **super admins** add users with any role and change roles, reset passwords,
+deactivate, reactivate and delete anyone but themselves; **admins** add members; **members** have no admin access.
 
 How it is secured:
 
 - **Row Level Security everywhere.** `public.profiles` is deny-by-default: anonymous visitors get nothing, users read their
   own row and may edit only their name, admins read all rows. Roles cannot be changed through the API.
 - **No keys in the browser.** All auth runs in Server Actions with the publishable key; session cookies are `httpOnly`.
-  The secret key and database URL are used only by the `db:*` scripts.
+  The secret key is used server-side only by the user-management actions (`lib/auth/user-actions.ts`), each of which
+  re-checks the caller first. The database URL is used only by the `db:*` scripts.
+- **Deactivation is immediate.** It blocks sign-in and, through RLS, removes elevated access even for a session that is
+  still open. A database guard always keeps at least one active super admin.
+- **Audit log.** Every user-management action is recorded in `public.audit_log`, append-only and readable by super
+  admins (shown on the overview).
 - **`proxy.ts`** refreshes sessions and guards `/admin` only, so marketing and demo pages stay static. Pages and actions
   re-check the user themselves (`lib/auth/session.ts`).
 - Password changes re-verify the current password; a database trigger clears the temporary-password flag only when the
@@ -62,7 +72,9 @@ How it is secured:
 | `/resources`                                           | Demo guide, roadmap notes, links                            |
 | `/contact`, `/waitlist`                                | Validated forms (nothing is sent or stored)                 |
 | `/sign-in`                                             | Email + password sign-in (Supabase Auth, no public sign-up)  |
-| `/admin`, `/admin/password`                            | Signed-in area: connection status, accounts, password change |
+| `/admin`                                               | Admin overview: connection status, people, recent activity  |
+| `/admin/users`                                         | Add users, change roles, reset passwords, deactivate, delete |
+| `/admin/password`                                      | Change your own password (forced for temporary passwords)    |
 | `/privacy`, `/terms`                                   | Honest placeholders                                         |
 | `/demo`                                                | Dashboard overview                                          |
 | `/demo/copilot`                                        | AI copilot (deterministic demo assistant)                   |

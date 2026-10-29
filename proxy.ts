@@ -41,7 +41,8 @@ export async function proxy(request: NextRequest) {
     target.searchParams.set("next", pathname);
     return redirectKeepingCookies(target, response);
   }
-  if (pathname === "/sign-in" && signedIn) {
+  // ?reason=session means a page found this session unusable (e.g. the account was deleted).
+  if (pathname === "/sign-in" && signedIn && !request.nextUrl.searchParams.has("reason")) {
     return redirectKeepingCookies(new URL("/admin", request.url), response);
   }
   return response;
