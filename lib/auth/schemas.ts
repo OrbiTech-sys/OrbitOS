@@ -33,6 +33,13 @@ export const addUserSchema = z.object({
   role: z.enum(["member", "admin", "super_admin"], "Choose a role"),
 });
 
+export const editUserSchema = z.object({
+  fullName: addUserSchema.shape.fullName,
+  email: addUserSchema.shape.email,
+});
+
+export const profileNameSchema = z.object({ fullName: addUserSchema.shape.fullName });
+
 export type UserActionState =
   | { ok: true; message: string; email?: string; tempPassword?: string }
   | { ok: false; error?: string; fieldErrors?: FieldErrors; values?: Record<string, string> }

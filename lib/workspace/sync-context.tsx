@@ -19,6 +19,8 @@ export interface WorkspaceSync {
   usage: WorkspaceUsage;
   /** Try saving again now. */
   retry(): void;
+  /** Save everything pending now. */
+  flush(): Promise<void>;
 }
 
 const SyncContext = createContext<WorkspaceSync | null>(null);

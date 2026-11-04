@@ -5,9 +5,11 @@
 //   3. Hardening       RLS on every public table, anon locked out, role not writable,
 //                      last super admin protected, audit log append-only
 //   4. APIs            Auth and REST reachable with the publishable key
-//   5. Super admin     exists, confirmed, has the role (and can sign in while the
+//   5. Public sign-up  a stranger can't create an account, whatever the dashboard says
+//   6. Website         content is public to read and closed to write; enquiries are private
+//   7. Super admin     exists, confirmed, has the role (and can sign in while the
 //                      default password is still in place)
-//   6. RLS in action   a throwaway user signs in and is checked against the
+//   8. RLS in action   a throwaway user signs in and is checked against the
 //                      policies (including promotion and deactivation), then deleted
 //
 // Guard tests run inside transactions that are always rolled back.
@@ -149,6 +151,31 @@ try {
     `Anonymous read was not refused: ${anonRead.error ? anonRead.error.message : `${anonRead.data?.length ?? 0} row(s) returned`}`,
   );
 
+  console.log("\nPublic sign-up");
+  const settings = await fetch(new URL("/auth/v1/settings", url), { headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY } }).then((r) => r.json());
+  const strangerEmail = `signup-check-${randomBytes(4).toString("hex")}@${process.env.SUPER_ADMIN_EMAIL?.split("@")[1]?.trim() || "example.com"}`;
+  const signup = await publicClient().auth.signUp({ email: strangerEmail, password: randomBytes(24).toString("base64url") });
+  const [strangers] = await sql`select count(*)::int as n from auth.users where lower(email) = ${strangerEmail}`;
+  expect(!!signup.error && strangers.n === 0, "A stranger can't create an account through the public sign-up endpoint", `Public sign-up created an account: ${strangerEmail}`);
+  if (strangers.n > 0) await sql`delete from auth.users where lower(email) = ${strangerEmail}`;
+  if (settings.disable_signup === false) info("The database blocks sign-ups, but also turn off “Allow new users to sign up” in Supabase → Authentication, so the endpoint isn't exposed at all");
+  else ok("Public sign-up is also turned off in Supabase");
+
+  console.log("\nWebsite content and forms");
+  const [site] = await sql`
+    select
+      has_table_privilege('anon', 'public.site_content', 'select') as anon_read,
+      has_table_privilege('anon', 'public.site_content', 'insert, update, delete') as anon_write,
+      has_table_privilege('anon', 'public.site_submissions', 'select, insert, update, delete') as anon_forms,
+      has_table_privilege('authenticated', 'public.site_submissions', 'insert') as auth_form_insert
+  `;
+  expect(site.anon_read && !site.anon_write, "Anyone can read the website's content, and visitors can't change it", "site_content privileges are wrong for visitors");
+  expect(!site.anon_forms && !site.auth_form_insert, "Website form submissions are closed to visitors and users", "site_submissions privileges are too broad");
+  const formsRead = await publicClient().from("site_submissions").select("id").limit(1);
+  expect(formsRead.error?.code === "42501", "Anonymous visitors can't read what others sent through the forms", `Anonymous read of site_submissions was not refused: ${formsRead.error?.message ?? "rows returned"}`);
+  const siteWrite = await publicClient().from("site_content").upsert({ key: "brand", data: { hacked: true } });
+  expect(!!siteWrite.error, "Anonymous visitors can't overwrite the website", "An anonymous write to site_content succeeded");
+
   console.log("\nSuper admin");
   const adminEmail = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
   if (!adminEmail) {
@@ -189,7 +216,7 @@ try {
   const tempDomain = process.env.SUPER_ADMIN_EMAIL?.split("@")[1]?.trim() || "example.com";
   const tempEmail = `rls-check-${randomBytes(4).toString("hex")}@${tempDomain}`;
   const tempPassword = randomBytes(24).toString("base64url");
-  const created = await admin.auth.admin.createUser({ email: tempEmail, password: tempPassword, email_confirm: true });
+  const created = await admin.auth.admin.createUser({ email: tempEmail, password: tempPassword, email_confirm: true, app_metadata: { created_by_admin: true } });
   if (expect(!created.error, "Created temporary member account", `Could not create temporary user: ${created.error?.message}`)) {
     tempUserId = created.data.user.id;
     const member = publicClient();
@@ -206,15 +233,32 @@ try {
       const rename = await member.from("profiles").update({ full_name: "RLS check" }).eq("id", tempUserId).select("full_name");
       expect(rename.data?.[0]?.full_name === "RLS check", "Can update their own display name", `Display name update failed: ${rename.error?.message}`);
 
+      const memberSite = await member.from("site_content").upsert({ key: "brand", data: { hacked: true } });
+      expect(!!memberSite.error, "A member can't edit the website", "A member wrote to site_content");
+      const memberInbox = await member.from("site_submissions").select("id").limit(1);
+      expect((memberInbox.data ?? []).length === 0, "A member can't read website enquiries", "A member could read site_submissions");
+
       await sql`update public.profiles set role = 'admin' where id = ${tempUserId}`;
       const asAdmin = await member.from("profiles").select("id");
       expect((asAdmin.data?.length ?? 0) > 1, "Promoted to admin, sees every profile", `Admin saw ${asAdmin.data?.length ?? 0} profile(s)`);
       const auditAsAdmin = await member.from("audit_log").select("id").limit(1);
       expect(auditAsAdmin.data?.length === 0, "Admins cannot read the audit log", "An admin could read audit_log");
+      const adminSite = await member.from("site_content").upsert({ key: "brand", data: { hacked: true } });
+      expect(!!adminSite.error, "An admin can't edit the website, only a super admin can", "An admin wrote to site_content");
+      const adminInbox = await member.from("site_submissions").select("id").limit(1);
+      expect(!adminInbox.error, "An admin can read website enquiries", `An admin couldn't read site_submissions: ${adminInbox.error?.message}`);
+
+      await sql`update public.profiles set role = 'super_admin' where id = ${tempUserId}`;
+      const superWrite = await member.from("site_content").upsert({ key: "check_only", data: { ok: true } }).select("key");
+      expect(superWrite.data?.[0]?.key === "check_only", "A super admin can edit the website", `A super admin couldn't write to site_content: ${superWrite.error?.message}`);
+      await member.from("site_content").delete().eq("key", "check_only");
+      await sql`update public.profiles set role = 'admin' where id = ${tempUserId}`;
 
       await sql`update public.profiles set deactivated_at = now() where id = ${tempUserId}`;
       const deactivated = await member.from("profiles").select("id");
       expect(deactivated.data?.length === 1, "Deactivation removes admin access at once, same session", `Deactivated admin still saw ${deactivated.data?.length} profile(s)`);
+      const deactivatedRename = await member.from("profiles").update({ full_name: "Too late" }).eq("id", tempUserId).select("full_name");
+      expect((deactivatedRename.data ?? []).length === 0, "A deactivated account can't change its own name", "A deactivated account renamed itself");
       await member.auth.signOut({ scope: "local" });
     }
   }

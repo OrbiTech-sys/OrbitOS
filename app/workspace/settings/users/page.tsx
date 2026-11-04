@@ -28,6 +28,5 @@ async function UsersSection() {
   if (!isAdminRole(user.role)) redirect("/workspace/settings");
 
   const [{ accounts, error, latencyMs }, activity] = await Promise.all([listAccounts(), listAuditLog()]);
-  const host = new URL(process.env.SUPABASE_URL!).host;
-  return <UsersPanel actor={user} accounts={accounts} error={error} latencyMs={latencyMs} host={host} activity={activity} />;
+  return <UsersPanel actor={user} accounts={accounts} error={error} latencyMs={latencyMs} activity={activity} />;
 }

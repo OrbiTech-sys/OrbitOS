@@ -11,12 +11,12 @@ import { Input } from "@/components/ui/input";
 import { productSchema, type ProductFormInput, type ProductFormOutput } from "@/lib/demo/schemas";
 import { useDemoActions } from "@/lib/demo/store";
 import { useIsDemo } from "@/lib/workspace/context";
-import { PRODUCT_CATEGORIES } from "@/lib/demo/types";
+import { PRODUCT_CATEGORIES, type Product } from "@/lib/demo/types";
 
 const selectCls =
   "h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-card outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30";
 
-function Form({ onDone }: { onDone: () => void }) {
+function Form({ product, onDone }: { product?: Product; onDone: () => void }) {
   const actions = useDemoActions();
   const toast = useToast();
   const {
@@ -26,12 +26,42 @@ function Form({ onDone }: { onDone: () => void }) {
     formState: { errors, submitCount },
   } = useForm<ProductFormInput, unknown, ProductFormOutput>({
     resolver: zodResolver(productSchema),
-    defaultValues: { name: "", sku: "", category: "Accessories", stock: "", threshold: "10", unitPrice: "", unitCost: "", supplier: "" },
+    defaultValues: product
+      ? {
+          name: product.name,
+          sku: product.sku,
+          category: product.category,
+          stock: String(product.stock),
+          threshold: String(product.threshold),
+          unitPrice: String(product.unitPrice),
+          unitCost: String(product.unitCost),
+          supplier: product.supplier,
+        }
+      : { name: "", sku: "", category: "Accessories", stock: "", threshold: "10", unitPrice: "", unitCost: "", supplier: "" },
     mode: "onTouched",
   });
   const errorCount = Object.keys(errors).length;
 
   function onSubmit(values: ProductFormOutput) {
+    if (product) {
+      // Stock isn't edited here: changes to it go through an adjustment, which records the reason.
+      const updated = actions.updateProduct(product.id, {
+        name: values.name,
+        sku: values.sku,
+        category: values.category,
+        threshold: values.threshold,
+        unitPrice: values.unitPrice,
+        unitCost: values.unitCost,
+        supplier: values.supplier,
+      });
+      if (!updated.ok) {
+        setError("sku", { message: updated.error });
+        return;
+      }
+      toast.success("Product updated", `${updated.value.name} was saved.`);
+      onDone();
+      return;
+    }
     const result = actions.addProduct(values);
     if (!result.ok) {
       setError("sku", { message: result.error });
@@ -65,9 +95,13 @@ function Form({ onDone }: { onDone: () => void }) {
             ))}
           </select>
         </Field>
-        <Field id="ap-stock" label="Opening stock" error={errors.stock?.message}>
-          <Input id="ap-stock" inputMode="numeric" aria-invalid={!!errors.stock} aria-describedby={describedBy("ap-stock", errors.stock?.message)} {...register("stock")} />
-        </Field>
+        {product ? (
+          <input type="hidden" {...register("stock")} />
+        ) : (
+          <Field id="ap-stock" label="Opening stock" error={errors.stock?.message}>
+            <Input id="ap-stock" inputMode="numeric" aria-invalid={!!errors.stock} aria-describedby={describedBy("ap-stock", errors.stock?.message)} {...register("stock")} />
+          </Field>
+        )}
         <Field id="ap-threshold" label="Stock threshold" error={errors.threshold?.message} hint="Warn when stock falls below this">
           <Input id="ap-threshold" inputMode="numeric" aria-invalid={!!errors.threshold} aria-describedby={describedBy("ap-threshold", errors.threshold?.message, "hint")} {...register("threshold")} />
         </Field>
@@ -87,22 +121,22 @@ function Form({ onDone }: { onDone: () => void }) {
         <Button type="button" variant="outline" onClick={onDone}>
           Cancel
         </Button>
-        <Button type="submit">Add product</Button>
+        <Button type="submit">{product ? "Save changes" : "Add product"}</Button>
       </DialogFooter>
     </form>
   );
 }
 
-export function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function AddProductDialog({ open, onOpenChange, product }: { open: boolean; onOpenChange: (open: boolean) => void; product?: Product }) {
   const demo = useIsDemo();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Add product</DialogTitle>
-          <DialogDescription>{demo ? "Adds a product to the local demo catalog." : "Adds a product to your catalog."}</DialogDescription>
+          <DialogTitle>{product ? "Edit product" : "Add product"}</DialogTitle>
+          <DialogDescription>{product ? "To change the stock level, use an adjustment, which records the reason." : demo ? "Adds a product to the local demo catalog." : "Adds a product to your catalog."}</DialogDescription>
         </DialogHeader>
-        {open && <Form onDone={() => onOpenChange(false)} />}
+        {open && <Form key={product?.id ?? "new"} product={product} onDone={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
   );

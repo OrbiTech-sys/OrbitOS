@@ -38,11 +38,16 @@ export function WorkspaceShell({ bootstrap, children }: { bootstrap: WorkspaceBo
   const [syncState, setSyncState] = useState<SyncState>({ status: "saved", pending: 0, error: null, usage: bootstrap.usage });
 
   const [runtime] = useState(() => {
+    let leaving = false;
     const queue = createSyncQueue({
       save: saveWorkspaceChanges,
       onState: setSyncState,
-      // Saving can never work again: leave for the page that explains why.
-      onFatal: (code) => window.location.assign(code === "inactive" ? "/account/deactivated" : "/sign-in?reason=session"),
+      // Saving can never work again: leave for the page that explains why, without asking
+      // "leave this page?" about changes that can no longer be saved.
+      onFatal: (code) => {
+        leaving = true;
+        window.location.assign(code === "inactive" ? "/account/deactivated" : code === "password" ? "/account/password" : "/sign-in?reason=session");
+      },
       initialUsage: bootstrap.usage,
     });
     const settings = createSettingsStore({
@@ -55,7 +60,7 @@ export function WorkspaceShell({ bootstrap, children }: { bootstrap: WorkspaceBo
       if (prev.readNotifications !== next.readNotifications) changes.upserts.push(readRecord(next.readNotifications));
       if (changes.upserts.length > 0 || changes.deletes.length > 0) queue.add(changes);
     };
-    return { queue, settings, onChange };
+    return { queue, settings, onChange, isLeaving: () => leaving };
   });
 
   useEffect(() => {
@@ -66,7 +71,7 @@ export function WorkspaceShell({ bootstrap, children }: { bootstrap: WorkspaceBo
     const onOnline = () => queue.retry();
     // Warn before leaving the page with changes that haven't reached the database yet.
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (queue.pending() > 0) e.preventDefault();
+      if (queue.pending() > 0 && !runtime.isLeaving()) e.preventDefault();
     };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("online", onOnline);
@@ -86,7 +91,7 @@ export function WorkspaceShell({ bootstrap, children }: { bootstrap: WorkspaceBo
   );
 
   const sync = useMemo<WorkspaceSync>(
-    () => ({ status: syncState.status, error: syncState.error, pending: syncState.pending, usage: syncState.usage ?? bootstrap.usage, retry: runtime.queue.retry }),
+    () => ({ status: syncState.status, error: syncState.error, pending: syncState.pending, usage: syncState.usage ?? bootstrap.usage, retry: runtime.queue.retry, flush: runtime.queue.flush }),
     [syncState, bootstrap.usage, runtime],
   );
 

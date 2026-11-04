@@ -12,14 +12,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { addDays } from "@/lib/demo/dates";
 import { contactSchema, type ContactFormInput, type ContactFormOutput } from "@/lib/demo/schemas";
 import { useDemoActions, useDemoData } from "@/lib/demo/store";
-import { CONTACT_STAGES } from "@/lib/demo/types";
+import { CONTACT_STAGES, type Contact } from "@/lib/demo/types";
 import { stageLabel } from "@/lib/demo/selectors";
 import { useIsDemo, useWorkspaceEnv } from "@/lib/workspace/context";
 
 const selectCls =
   "h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-card outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive";
 
-function Form({ onDone }: { onDone: () => void }) {
+const SOURCES = ["Manual entry", "Website", "Referral", "Event", "Outbound", "Partner"];
+
+function Form({ contact, onDone }: { contact?: Contact; onDone: () => void }) {
   const data = useDemoData();
   const { today, selfId, mode } = useWorkspaceEnv();
   const actions = useDemoActions();
@@ -30,25 +32,57 @@ function Form({ onDone }: { onDone: () => void }) {
     formState: { errors, isSubmitting, submitCount },
   } = useForm<ContactFormInput, unknown, ContactFormOutput>({
     resolver: zodResolver(contactSchema),
-    defaultValues: {
-      name: "",
-      company: "",
-      email: "",
-      phone: "",
-      jobTitle: "",
-      stage: "new",
-      dealValue: "",
-      followUpDate: addDays(today, 3),
-      // The demo's contacts default to Priya's book; a member's own contacts default to themselves.
-      ownerId: mode === "demo" ? "tm-priya" : selfId,
-      source: "Manual entry",
-      notes: "",
-    },
+    defaultValues: contact
+      ? {
+          name: contact.name,
+          company: contact.company,
+          email: contact.email,
+          phone: contact.phone,
+          jobTitle: contact.jobTitle,
+          stage: contact.stage,
+          dealValue: contact.dealValue ? String(contact.dealValue) : "",
+          followUpDate: contact.followUpDate ?? "",
+          ownerId: contact.ownerId,
+          source: contact.source,
+          notes: contact.notes,
+        }
+      : {
+          name: "",
+          company: "",
+          email: "",
+          phone: "",
+          jobTitle: "",
+          stage: "new",
+          dealValue: "",
+          followUpDate: addDays(today, 3),
+          // The demo's contacts default to Priya's book; a member's own contacts default to themselves.
+          ownerId: mode === "demo" ? "tm-priya" : selfId,
+          source: "Manual entry",
+          notes: "",
+        },
     mode: "onTouched",
   });
   const errorCount = Object.keys(errors).length;
 
   function onSubmit(values: ContactFormOutput) {
+    if (contact) {
+      actions.updateContact(contact.id, {
+        name: values.name,
+        company: values.company,
+        email: values.email,
+        phone: values.phone,
+        jobTitle: values.jobTitle,
+        stage: values.stage,
+        dealValue: values.dealValue,
+        followUpDate: values.followUpDate || null,
+        ownerId: values.ownerId,
+        source: values.source,
+        notes: values.notes,
+      });
+      toast.success("Contact updated", `${values.name} was saved.`);
+      onDone();
+      return;
+    }
     const result = actions.addContact({ ...values, followUpDate: values.followUpDate || null });
     if (!result.ok) {
       toast.error("Could not add contact", result.error);
@@ -108,7 +142,7 @@ function Form({ onDone }: { onDone: () => void }) {
         </Field>
         <Field id="ac-source" label="Source" optional error={errors.source?.message}>
           <select id="ac-source" className={selectCls} {...register("source")}>
-            {["Manual entry", "Website", "Referral", "Event", "Outbound", "Partner"].map((s) => (
+            {(contact && !SOURCES.includes(contact.source) ? [contact.source, ...SOURCES] : SOURCES).map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
@@ -122,23 +156,23 @@ function Form({ onDone }: { onDone: () => void }) {
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          Add contact
+          {contact ? "Save changes" : "Add contact"}
         </Button>
       </DialogFooter>
     </form>
   );
 }
 
-export function AddContactDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function AddContactDialog({ open, onOpenChange, contact }: { open: boolean; onOpenChange: (open: boolean) => void; contact?: Contact }) {
   const demo = useIsDemo();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Add contact</DialogTitle>
+          <DialogTitle>{contact ? "Edit contact" : "Add contact"}</DialogTitle>
           <DialogDescription>{demo ? "Saved locally in this demo. " : ""}Name, company and email are required.</DialogDescription>
         </DialogHeader>
-        {open && <Form onDone={() => onOpenChange(false)} />}
+        {open && <Form key={contact?.id ?? "new"} contact={contact} onDone={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
   );

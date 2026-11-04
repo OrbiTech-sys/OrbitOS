@@ -133,20 +133,22 @@ export function CrmView() {
           initialSort={{ key: "follow", dir: "asc" }}
           empty={
             <EmptyState
-              title="No contacts match"
-              description="Try a different stage or search term, or add a new contact."
+              title={data.contacts.length ? "No contacts match" : "No contacts yet"}
+              description={data.contacts.length ? "Try a different stage or search term, or add a new contact." : "Add your first customer or lead to get started."}
               action={
                 <div className="flex flex-wrap justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setQuery("");
-                      setStage("all");
-                      setDueOnly(false);
-                    }}
-                  >
-                    Clear filters
-                  </Button>
+                  {data.contacts.length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setQuery("");
+                        setStage("all");
+                        setDueOnly(false);
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  )}
                   <Button onClick={() => setAddOpen(true)}>
                     <UserPlus /> Add contact
                   </Button>

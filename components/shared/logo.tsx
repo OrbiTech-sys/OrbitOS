@@ -25,13 +25,17 @@ export function Logo({
   markClassName,
   inverse = false,
   hideWordmark = false,
+  name,
 }: {
   className?: string;
   markClassName?: string;
   /** Use on dark backgrounds. */
   inverse?: boolean;
   hideWordmark?: boolean;
+  /** Shown instead of the OrbitOS wordmark when the super admin has renamed the product. */
+  name?: string;
 }) {
+  const custom = name && name !== "OrbitOS";
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <LogoMark className={markClassName} inverse={inverse} />
@@ -42,7 +46,13 @@ export function Logo({
           hideWordmark && "sr-only",
         )}
       >
-        Orbit<span className={inverse ? "text-indigo-300" : "text-primary"}>OS</span>
+        {custom ? (
+          name
+        ) : (
+          <>
+            Orbit<span className={inverse ? "text-indigo-300" : "text-primary"}>OS</span>
+          </>
+        )}
       </span>
     </span>
   );

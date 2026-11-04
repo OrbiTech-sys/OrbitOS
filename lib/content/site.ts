@@ -1,18 +1,7 @@
-import type { IconName } from "@/components/shared/icon";
+import type { IconName } from "./icons";
+import type { HomeContent, PricingContent, SolutionContent } from "./schema";
 
 /* ----------------------------------------------------------- Solutions --- */
-
-export interface SolutionContent {
-  slug: string;
-  name: string;
-  icon: IconName;
-  tagline: string;
-  headline: string;
-  description: string;
-  outcomes: string[];
-  modules: string[];
-  demoHref: string;
-}
 
 export const SOLUTIONS: SolutionContent[] = [
   {
@@ -30,6 +19,7 @@ export const SOLUTIONS: SolutionContent[] = [
     ],
     modules: ["crm", "sales", "analytics", "copilot"],
     demoHref: "/demo/crm",
+    visible: true,
   },
   {
     slug: "control-inventory",
@@ -46,6 +36,7 @@ export const SOLUTIONS: SolutionContent[] = [
     ],
     modules: ["inventory", "sales", "projects", "copilot"],
     demoHref: "/demo/inventory",
+    visible: true,
   },
   {
     slug: "financial-visibility",
@@ -54,7 +45,7 @@ export const SOLUTIONS: SolutionContent[] = [
     tagline: "Receivables, expenses and trends",
     headline: "Understand what is owed, what is due and what is coming.",
     description:
-      "Follow invoices from issue to payment, see receivables by age, and compare revenue with expenses. Illustrative in this proof of concept: it is not accounting software.",
+      "Follow invoices from issue to payment, see receivables by age, and compare revenue with expenses. It keeps your records and shows your numbers; it is not accounting software.",
     outcomes: [
       "Overdue invoices stand out immediately",
       "Receivables summary and ageing in one view",
@@ -62,6 +53,7 @@ export const SOLUTIONS: SolutionContent[] = [
     ],
     modules: ["finance", "sales", "analytics", "copilot"],
     demoHref: "/demo/finance",
+    visible: true,
   },
   {
     slug: "team-coordination",
@@ -78,6 +70,7 @@ export const SOLUTIONS: SolutionContent[] = [
     ],
     modules: ["projects", "team", "crm", "copilot"],
     demoHref: "/demo/projects",
+    visible: true,
   },
   {
     slug: "automate-busywork",
@@ -94,21 +87,13 @@ export const SOLUTIONS: SolutionContent[] = [
     ],
     modules: ["automation", "sales", "inventory", "finance"],
     demoHref: "/demo/orders",
+    visible: true,
   },
 ];
 
-export const SOLUTION_BY_SLUG = Object.fromEntries(SOLUTIONS.map((s) => [s.slug, s])) as Record<string, SolutionContent>;
+/* ------------------------------------------------------------- Homepage -- */
 
-/* -------------------------------------------------------- Pain points --- */
-
-export interface PainPoint {
-  icon: IconName;
-  title: string;
-  consequence: string;
-  solution: string;
-}
-
-export const PAIN_POINTS: PainPoint[] = [
+const PAIN_POINTS: HomeContent["problems"]["items"] = [
   {
     icon: "layers",
     title: "Disconnected software and scattered data",
@@ -147,73 +132,61 @@ export const PAIN_POINTS: PainPoint[] = [
   },
 ];
 
-/* --------------------------------------------------------------- FAQ ---- */
-
-export interface FaqItem {
-  q: string;
-  a: string;
-}
-
-export const FAQ: FaqItem[] = [
+const FAQ: HomeContent["faq"]["items"] = [
   {
     q: "Is OrbitOS available today?",
-    a: "No. OrbitOS is a proof of concept and a working placeholder name. There is no production service, no sign-up and no paid plan yet. You can explore the interactive demo and join the waitlist to hear about early access.",
+    a: "Yes, by invitation. Accounts are created by an administrator, so there is no public sign-up: request access and tell us about your business. You can explore the live demo without an account.",
   },
   {
     q: "Where does the demo data come from, and is anything saved?",
-    a: "All demo records are fictional and generated locally in your browser. Changes you make stay in memory for the session; refreshing the page restores the sample data. Display preferences you choose in Settings are stored in your browser's local storage only.",
+    a: "All demo records are fictional and generated in your browser, and refreshing the page restores them. In your own workspace it is the opposite: everything you add is saved to your account and is there the next time you sign in.",
   },
   {
     q: "Is the AI copilot a real AI model?",
-    a: "Not in this proof of concept. The demo assistant is deterministic: it recognises a set of business questions and answers them by reading the sample dataset on your device. A real copilot is planned to use a language model with access to your organisation's data, with the same grounding principle.",
+    a: "Not yet. The assistant is rule-based: it recognises a set of business questions and answers them by reading your records on your device, so your data is not sent to an AI service. Connecting it to a language model is on the roadmap.",
   },
   {
-    q: "How will data security and permissions work?",
-    a: "Security is a design goal, not a claim today. The planned product includes role-based access, audit trails and encryption in transit and at rest. We are not asserting any certification or compliance status. Those depend on the production architecture and independent assessment.",
+    q: "How is my data kept secure?",
+    a: "Every workspace is private to its account, and the database itself enforces that, not just the screens. Administrators can see how much storage an account uses but never what its records contain. Passwords are hashed, data is encrypted in transit and at rest, and administrator actions are recorded in an audit log. We do not claim any certification.",
+  },
+  {
+    q: "Who can do what?",
+    a: "Members use their own workspace. Admins also add and manage members and read website enquiries. Super admins manage everyone, set storage limits and edit this website, including its menus and prices.",
   },
   {
     q: "Which integrations will be supported?",
-    a: "Planned categories include email and calendar, accounting, payments and storefronts, plus a documented API. None exist yet. The integrations module in the demo describes intent only.",
+    a: "Planned categories include email and calendar, accounting, payments and storefronts, plus a documented API. None exist yet.",
   },
   {
     q: "Can OrbitOS be customised for my industry?",
-    a: "The goal is a modular core with industry-specific templates. This proof of concept shows how modules combine for six sectors, but deep industry processes (such as manufacturing work orders) are not implemented.",
+    a: "The core is modular, and you can hide the modules you do not need. Six sectors are described on this site, but deep industry processes (such as manufacturing work orders) are not implemented yet.",
   },
   {
-    q: "What would implementation look like?",
-    a: "The intent is self-serve setup for small teams: choose a business type, pick modules and configure the workspace in a few steps, as previewed in “How it works”. Guided data import and migration support have not been designed yet.",
+    q: "What does getting started look like?",
+    a: "An administrator creates your account and gives you a temporary password. You choose your own when you first sign in, then start adding your customers, products and work. Guided data import and migration are not available yet.",
   },
   {
-    q: "How will pricing work?",
-    a: "The pricing page shows illustrative tiers to explain how modules might be packaged. The numbers are placeholders, not an offer. Final pricing has not been set.",
+    q: "How does pricing work?",
+    a: "The pricing page lists the current plans. There is no online checkout yet, so talk to the team to get set up.",
   },
   {
     q: "Is the finance module real accounting software?",
-    a: "No. It is an illustrative interface for receivables, expenses and trends. It does not process payments, connect to banks, calculate taxes or produce certified accounting records.",
+    a: "No. It keeps your invoices and expenses and shows receivables and trends. It does not process payments, connect to banks, calculate taxes or produce certified accounting records.",
   },
 ];
 
-/* --------------------------------------------------------- Trust cards --- */
-
-export interface TrustItem {
-  icon: IconName;
-  title: string;
-  status: "Design goal" | "Planned" | "Demo only" | "Not available";
-  body: string;
-}
-
-export const TRUST: TrustItem[] = [
+const TRUST: HomeContent["trust"]["items"] = [
   {
     icon: "shield",
     title: "Data security",
-    status: "Design goal",
-    body: "This demo has no backend and collects nothing. In production we intend encryption in transit and at rest, but we make no certification or compliance claims.",
+    status: "Available",
+    body: "Each workspace is private to its account, enforced in the database. Data is encrypted in transit and at rest. We make no certification or compliance claims.",
   },
   {
     icon: "lock",
     title: "Permissions",
-    status: "Planned",
-    body: "Role-based access, so people see only what they need, is planned. The demo shows a single sample user.",
+    status: "Available",
+    body: "Three roles: member, admin and super admin. Administrator actions are recorded in an audit log. Finer per-module permissions are planned.",
   },
   {
     icon: "plug",
@@ -224,98 +197,166 @@ export const TRUST: TrustItem[] = [
   {
     icon: "settings",
     title: "Customization",
-    status: "Demo only",
-    body: "You can toggle modules and preferences in the demo. Custom fields and workflows are future work.",
+    status: "Available",
+    body: "Toggle modules and set your own preferences and currency display. Custom fields and workflows are future work.",
   },
   {
     icon: "rocket",
     title: "Implementation",
-    status: "Planned",
-    body: "A short, guided setup is the goal. Data migration tooling has not been built.",
+    status: "In progress",
+    body: "An administrator can set up an account in moments. Guided data migration has not been built yet.",
   },
   {
     icon: "bot",
     title: "AI capabilities",
-    status: "Demo only",
-    body: "The demo assistant is rule-based and runs entirely in your browser. It calls no AI service.",
+    status: "Available",
+    body: "The assistant is rule-based and runs on your device. It calls no AI service, so nothing leaves your workspace.",
   },
   {
     icon: "factory",
     title: "Industry support",
-    status: "Planned",
-    body: "Six sectors are illustrated. Deep, industry-specific processes will be introduced progressively.",
+    status: "In progress",
+    body: "Six sectors are described. Deep, industry-specific processes will be introduced progressively.",
   },
   {
     icon: "money",
-    title: "Pricing",
+    title: "Payments",
     status: "Not available",
-    body: "Tiers on the pricing page are illustrative. Nothing can be purchased.",
+    body: "There is no online checkout, and OrbitOS does not process payments for you. Invoices and “mark as paid” are records only.",
   },
   {
     icon: "alert",
-    title: "Product availability",
+    title: "Service commitments",
     status: "Not available",
-    body: "OrbitOS is a proof of concept. Join the waitlist and we will share progress honestly.",
+    body: "We do not publish uptime guarantees or support response times yet, and we will say so plainly until we do.",
   },
 ];
+
+export const HOME: HomeContent = {
+  hero: {
+    badge: "By The OrbiTech Solution",
+    badgeText: "An AI-powered business operating system",
+    titleLine1: "Stop managing tools.",
+    titleLine2: "Start running your business.",
+    description: "Connect your operations, automate repetitive work, and understand what needs attention — all from one intelligent workspace.",
+    primaryLabel: "Explore the Live Demo",
+    primaryHref: "/demo",
+    secondaryLabel: "See How It Works",
+    secondaryHref: "#how-it-works",
+    note: "No sign-up needed. The demo runs in your browser with fictional sample data.",
+    benefits: ["One workspace for your operations", "Start small, add modules later", "Answers grounded in your own records", "Less re-typing between tools"],
+  },
+  problems: {
+    eyebrow: "The everyday friction",
+    title: "Six problems that quietly slow a growing business",
+    description: "Most teams do not have a software problem. They have a connection problem. Here is what that looks like in practice, and how a connected workspace responds.",
+    items: PAIN_POINTS,
+    solutionLabel: "With OrbitOS",
+  },
+  modules: {
+    eyebrow: "Modules",
+    title: "Start with what you need. Expand when you're ready.",
+    description: "Building blocks that share one set of records. A small agency can begin with CRM, projects and invoicing; a retailer with sales and inventory.",
+  },
+  industries: {
+    eyebrow: "Industry solutions",
+    title: "The same core, shaped around how you work",
+    description: "Pick an industry to see typical use cases and which modules fit. Deep, industry-specific processes arrive progressively, and this page says plainly where they are not built yet.",
+  },
+  trust: {
+    eyebrow: "Straight answers",
+    title: "What is real today, and what is not",
+    description: "We would rather be clear than impressive. No customer logos, testimonials, certifications or uptime promises appear here because none exist yet.",
+    items: TRUST,
+  },
+  faq: { eyebrow: "FAQ", title: "Questions you are probably asking", items: FAQ },
+  finalCta: {
+    title: "Your business deserves a simpler way to work.",
+    body: "See a connected workspace in action, then tell us what you would want it to do for you.",
+    primaryLabel: "Explore the demo",
+    primaryHref: "/demo",
+    secondaryLabel: "Request access",
+    secondaryHref: "/waitlist",
+    tertiaryLabel: "Contact the team",
+    tertiaryHref: "/contact",
+  },
+};
 
 /* --------------------------------------------------------------- Pricing -- */
 
-export interface PricingTier {
-  id: string;
-  name: string;
-  audience: string;
-  price: string;
-  priceNote: string;
-  cta: string;
-  featured?: boolean;
-  features: string[];
-}
+const yes = ["starter", "growth", "business"];
+const growthUp = ["growth", "business"];
+const businessOnly = ["business"];
 
-export const PRICING: PricingTier[] = [
-  {
-    id: "starter",
-    name: "Starter",
-    audience: "Solo operators and small agencies",
-    price: "$19",
-    priceNote: "per user / month, illustrative",
-    cta: "Join the waitlist",
-    features: ["CRM and contacts", "Projects and tasks", "Quotations and invoices", "Core dashboard", "Community support"],
+export const PRICING: PricingContent = {
+  eyebrow: "Pricing",
+  title: "Simple plans that grow with you",
+  description: "Start with the modules you need and move up when you are ready. Talk to the team to get set up.",
+  homeTitle: "Simple plans that grow with you",
+  homeDescription: "Start with what you need. Compare what each plan includes, or talk to the team.",
+  notice: "",
+  featuredBadge: "Most likely fit for growing teams",
+  tiers: [
+    {
+      id: "starter",
+      name: "Starter",
+      audience: "Solo operators and small agencies",
+      price: "$19",
+      priceNote: "per user / month",
+      cta: "Request access",
+      ctaHref: "/waitlist",
+      featured: false,
+      visible: true,
+      features: ["CRM and contacts", "Projects and tasks", "Quotations and invoices", "Core dashboard", "Community support"],
+    },
+    {
+      id: "growth",
+      name: "Growth",
+      audience: "Growing teams that sell and stock products",
+      price: "$49",
+      priceNote: "per user / month",
+      cta: "Request access",
+      ctaHref: "/waitlist",
+      featured: true,
+      visible: true,
+      features: ["Everything in Starter", "Orders and inventory", "Finance overview", "Analytics and reporting", "AI copilot (early access)", "Email support"],
+    },
+    {
+      id: "business",
+      name: "Business",
+      audience: "Multi-team and multi-location organisations",
+      price: "Custom",
+      priceNote: "talk to us",
+      cta: "Talk to the team",
+      ctaHref: "/contact",
+      featured: false,
+      visible: true,
+      features: ["Everything in Growth", "Multiple locations", "Advanced permissions", "Workflow automation", "Integration support", "Guided onboarding"],
+    },
+  ],
+  comparisonTitle: "Compare what each plan includes",
+  comparison: [
+    { feature: "CRM and contacts", included: yes },
+    { feature: "Projects and tasks", included: yes },
+    { feature: "Quotations and invoices", included: yes },
+    { feature: "Orders and inventory", included: growthUp },
+    { feature: "Finance overview", included: growthUp },
+    { feature: "Analytics and reporting", included: growthUp },
+    { feature: "AI copilot", included: growthUp },
+    { feature: "Multiple locations", included: businessOnly },
+    { feature: "Advanced permissions", included: businessOnly },
+    { feature: "Workflow automation", included: businessOnly },
+    { feature: "Integration support", included: businessOnly },
+  ],
+  closing: {
+    title: "Not sure which plan fits?",
+    body: "Tell us how your team works and which modules matter most.",
+    primaryLabel: "Request access",
+    primaryHref: "/waitlist",
+    secondaryLabel: "Contact the team",
+    secondaryHref: "/contact",
   },
-  {
-    id: "growth",
-    name: "Growth",
-    audience: "Growing teams that sell and stock products",
-    price: "$49",
-    priceNote: "per user / month, illustrative",
-    cta: "Request early access",
-    featured: true,
-    features: [
-      "Everything in Starter",
-      "Orders and inventory",
-      "Finance overview",
-      "Analytics and reporting",
-      "AI copilot (early access)",
-      "Email support",
-    ],
-  },
-  {
-    id: "business",
-    name: "Business",
-    audience: "Multi-team and multi-location organisations",
-    price: "Custom",
-    priceNote: "to be discussed, illustrative",
-    cta: "Talk to the team",
-    features: [
-      "Everything in Growth",
-      "Multiple locations",
-      "Advanced permissions",
-      "Workflow automation",
-      "Integration support",
-      "Guided onboarding",
-    ],
-  },
-];
+};
 
 /* ---------------------------------------------------------- Business types -- */
 

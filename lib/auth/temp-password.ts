@@ -15,7 +15,8 @@ export function generateTempPassword() {
   for (;;) {
     const chars = Array.from({ length: 16 }, () => ALPHABET[randomInt(ALPHABET.length)]);
     const value = chars.join("");
-    if (/\d/.test(value) && /[a-z]/i.test(value)) {
+    // All three character classes, so a stricter password policy on the auth project can't refuse it.
+    if (/\d/.test(value) && /[a-z]/.test(value) && /[A-Z]/.test(value)) {
       return value.match(/.{4}/g)!.join("-");
     }
   }

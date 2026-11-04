@@ -11,13 +11,13 @@ import { Input } from "@/components/ui/input";
 import { addDays } from "@/lib/demo/dates";
 import { taskSchema, type TaskFormInput, type TaskFormOutput } from "@/lib/demo/schemas";
 import { useDemoActions, useDemoData } from "@/lib/demo/store";
-import { TASK_PRIORITIES } from "@/lib/demo/types";
+import { TASK_PRIORITIES, type Task } from "@/lib/demo/types";
 import { useWorkspaceEnv } from "@/lib/workspace/context";
 
 const selectCls =
   "h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-card outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30";
 
-function Form({ onDone, defaultProjectId }: { onDone: () => void; defaultProjectId?: string }) {
+function Form({ task, onDone, defaultProjectId }: { task?: Task; onDone: () => void; defaultProjectId?: string }) {
   const data = useDemoData();
   const { today, selfId } = useWorkspaceEnv();
   const actions = useDemoActions();
@@ -28,18 +28,27 @@ function Form({ onDone, defaultProjectId }: { onDone: () => void; defaultProject
     formState: { errors, submitCount },
   } = useForm<TaskFormInput, unknown, TaskFormOutput>({
     resolver: zodResolver(taskSchema),
-    defaultValues: {
-      title: "",
-      projectId: defaultProjectId ?? data.projects[0]?.id ?? "",
-      assigneeId: selfId,
-      priority: "medium",
-      dueDate: addDays(today, 3),
-    },
+    defaultValues: task
+      ? { title: task.title, projectId: task.projectId, assigneeId: task.assigneeId, priority: task.priority, dueDate: task.dueDate }
+      : {
+          title: "",
+          projectId: defaultProjectId ?? data.projects[0]?.id ?? "",
+          assigneeId: selfId,
+          priority: "medium",
+          dueDate: addDays(today, 3),
+        },
     mode: "onTouched",
   });
   const errorCount = Object.keys(errors).length;
 
   function onSubmit(values: TaskFormOutput) {
+    if (task) {
+      const updated = actions.updateTask(task.id, values);
+      if (updated.ok) toast.success("Task updated", `“${updated.value.title}” was saved.`);
+      else toast.error("Could not save the task", updated.error);
+      onDone();
+      return;
+    }
     const r = actions.addTask(values);
     if (!r.ok) {
       toast.error("Could not add task", r.error);
@@ -95,7 +104,7 @@ function Form({ onDone, defaultProjectId }: { onDone: () => void; defaultProject
         <Button type="button" variant="outline" onClick={onDone}>
           Cancel
         </Button>
-        <Button type="submit">Add task</Button>
+        <Button type="submit">{task ? "Save changes" : "Add task"}</Button>
       </DialogFooter>
     </form>
   );
@@ -106,12 +115,14 @@ export function AddTaskDialog({
   onOpenChange,
   defaultProjectId,
   onCreateProject,
+  task,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultProjectId?: string;
   /** Offered when there is no project yet, since every task belongs to one. */
   onCreateProject?: () => void;
+  task?: Task;
 }) {
   const data = useDemoData();
   const noProjects = data.projects.length === 0;
@@ -119,8 +130,8 @@ export function AddTaskDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add task</DialogTitle>
-          <DialogDescription>{noProjects ? "Every task belongs to a project." : "New tasks start as “To do” and count toward the dashboard."}</DialogDescription>
+          <DialogTitle>{task ? "Edit task" : "Add task"}</DialogTitle>
+          <DialogDescription>{task ? "Change the details of this task." : noProjects ? "Every task belongs to a project." : "New tasks start as “To do” and count toward the dashboard."}</DialogDescription>
         </DialogHeader>
         {open && noProjects && (
           <div className="space-y-4">
@@ -137,7 +148,7 @@ export function AddTaskDialog({
             </DialogFooter>
           </div>
         )}
-        {open && !noProjects && <Form onDone={() => onOpenChange(false)} defaultProjectId={defaultProjectId} />}
+        {open && !noProjects && <Form key={task?.id ?? "new"} task={task} onDone={() => onOpenChange(false)} defaultProjectId={defaultProjectId} />}
       </DialogContent>
     </Dialog>
   );

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { z } from "zod";
 
+import { Link } from "@/components/demo/link";
 import { useToast } from "@/components/demo/toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -138,6 +139,42 @@ function Form({ mode, initialCustomerId, onDone }: { mode: Mode; initialCustomer
   }
 
   const noun = mode === "order" ? "order" : "quotation";
+
+  // Nothing to choose from yet: say what is missing instead of offering two empty lists.
+  if (people.length === 0 || products.length === 0) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">To create {noun === "order" ? "an order" : "a quotation"} you first need:</p>
+        <ul className="space-y-2 text-sm">
+          {people.length === 0 && (
+            <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
+              <span>{mode === "order" ? "A contact marked as a customer" : "A contact"}</span>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/demo/crm" onClick={onDone}>
+                  Go to CRM
+                </Link>
+              </Button>
+            </li>
+          )}
+          {products.length === 0 && (
+            <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
+              <span>A product</span>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/demo/inventory" onClick={onDone}>
+                  Go to Inventory
+                </Link>
+              </Button>
+            </li>
+          )}
+        </ul>
+        <DialogFooter className="border-t pt-4">
+          <Button type="button" variant="outline" onClick={onDone}>
+            Close
+          </Button>
+        </DialogFooter>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={submit} noValidate className="space-y-5">

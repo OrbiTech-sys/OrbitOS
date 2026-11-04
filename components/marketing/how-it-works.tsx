@@ -10,7 +10,8 @@ import { LogoMark } from "@/components/shared/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MODULES, MODULE_BY_SLUG } from "@/lib/content/modules";
+import { bySlug } from "@/lib/content/published";
+import type { ModuleContent } from "@/lib/content/schema";
 import { BUSINESS_TYPE_OPTIONS } from "@/lib/content/site";
 import { getInsights } from "@/lib/demo/copilot";
 import { CURRENCIES } from "@/lib/demo/format";
@@ -22,13 +23,15 @@ import { cn } from "@/lib/utils";
 const STEPS = ["Choose your business type", "Select the modules you need", "Configure your workspace", "Explore your business dashboard"] as const;
 const TEAM_SIZES = ["1–5", "6–20", "21–100", "100+"] as const;
 
-/** Modules that can be toggled in the preview (a subset that has a live demo). */
-const SELECTABLE = MODULES.filter((m) => ["crm", "sales", "inventory", "finance", "projects", "analytics", "copilot", "team"].includes(m.slug));
+/** Modules that can be toggled in the preview (the ones with a dashboard tile). */
+const PREVIEWABLE = ["crm", "sales", "inventory", "finance", "projects", "analytics", "copilot", "team"];
 
-export function HowItWorks() {
+export function HowItWorks({ modules: allModules }: { modules: ModuleContent[] }) {
+  const selectable = allModules.filter((m) => PREVIEWABLE.includes(m.slug));
+  const suggested = (id: string) => (BUSINESS_TYPE_OPTIONS.find((b) => b.id === id)?.modules ?? []).filter((slug) => bySlug(selectable, slug));
   const [step, setStep] = useState(0);
   const [typeId, setTypeId] = useState<string>("wholesale");
-  const [modules, setModules] = useState<string[]>(() => BUSINESS_TYPE_OPTIONS.find((b) => b.id === "wholesale")!.modules);
+  const [modules, setModules] = useState<string[]>(() => suggested("wholesale"));
   const [name, setName] = useState("Meridian Workspace Supply");
   const [currency, setCurrency] = useState("USD");
   const [size, setSize] = useState<(typeof TEAM_SIZES)[number]>("6–20");
@@ -37,7 +40,7 @@ export function HowItWorks() {
 
   function chooseType(id: string) {
     setTypeId(id);
-    setModules(BUSINESS_TYPE_OPTIONS.find((b) => b.id === id)!.modules);
+    setModules(suggested(id));
   }
   function toggleModule(slug: string) {
     setModules((m) => (m.includes(slug) ? m.filter((x) => x !== slug) : [...m, slug]));
@@ -50,8 +53,8 @@ export function HowItWorks() {
       <SectionHeading
         id="how-title"
         eyebrow="How it works"
-        title="From signing up to seeing your business, in four steps"
-        description="This is an interactive preview of the intended onboarding. Nothing is saved or sent: it simply shows how the workspace adapts to your choices."
+        title="From first look to seeing your business, in four steps"
+        description="An interactive preview of getting set up. Nothing is saved or sent: it simply shows how the workspace adapts to your choices."
       />
 
       <div className="mt-12 grid gap-6 lg:grid-cols-[18rem_1fr]">
@@ -122,7 +125,7 @@ export function HowItWorks() {
                   Suggested for <strong className="font-semibold text-foreground">{type.name.toLowerCase()}</strong>. Add or remove anything. Start small, expand later.
                 </p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  {SELECTABLE.map((m) => {
+                  {selectable.map((m) => {
                     const on = modules.includes(m.slug);
                     return (
                       <label
@@ -196,7 +199,7 @@ export function HowItWorks() {
               </div>
             )}
 
-            {step === 3 && <DashboardPreview name={name.trim() || "Your business"} modules={modules} currency={currency} size={size} />}
+            {step === 3 && <DashboardPreview name={name.trim() || "Your business"} modules={modules} allModules={allModules} currency={currency} size={size} />}
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t bg-muted/40 px-5 py-3.5 sm:px-7">
@@ -221,7 +224,7 @@ export function HowItWorks() {
   );
 }
 
-function DashboardPreview({ name, modules, currency, size }: { name: string; modules: string[]; currency: string; size: string }) {
+function DashboardPreview({ name, modules, allModules, currency, size }: { name: string; modules: string[]; allModules: ModuleContent[]; currency: string; size: string }) {
   const m = useMemo(() => computeMetrics(SEED_DATA), []);
   const tiles = useMemo(() => {
     const all: Record<string, { label: string; value: string; hint: string }> = {
@@ -250,12 +253,17 @@ function DashboardPreview({ name, modules, currency, size }: { name: string; mod
             </div>
             <ul className="space-y-0.5 text-xs">
               <li className="rounded-md bg-sidebar-accent px-2 py-1.5 font-medium text-white">Overview</li>
-              {modules.map((slug) => (
-                <li key={slug} className="flex items-center gap-2 rounded-md px-2 py-1.5">
-                  <Icon name={MODULE_BY_SLUG[slug].icon} className="size-3.5 opacity-80" />
-                  <span className="truncate">{MODULE_BY_SLUG[slug].name}</span>
-                </li>
-              ))}
+              {modules.map((slug) => {
+                const m = bySlug(allModules, slug);
+                return (
+                  m && (
+                    <li key={slug} className="flex items-center gap-2 rounded-md px-2 py-1.5">
+                      <Icon name={m.icon} className="size-3.5 opacity-80" />
+                      <span className="truncate">{m.name}</span>
+                    </li>
+                  )
+                );
+              })}
             </ul>
           </aside>
           <div className="min-w-0 flex-1 p-4">

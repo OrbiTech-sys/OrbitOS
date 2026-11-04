@@ -10,11 +10,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { projectSchema, type ProjectFormInput, type ProjectFormOutput } from "@/lib/demo/schemas";
 import { useDemoActions, useDemoData } from "@/lib/demo/store";
+import type { Project } from "@/lib/demo/types";
 
 const selectCls =
   "h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-card outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30";
 
-function Form({ onDone }: { onDone: (projectId?: string) => void }) {
+function Form({ project, onDone }: { project?: Project; onDone: (projectId?: string) => void }) {
   const data = useDemoData();
   const actions = useDemoActions();
   const toast = useToast();
@@ -25,11 +26,21 @@ function Form({ onDone }: { onDone: (projectId?: string) => void }) {
     formState: { errors },
   } = useForm<ProjectFormInput, unknown, ProjectFormOutput>({
     resolver: zodResolver(projectSchema),
-    defaultValues: { name: "", customerId: "", status: "active" },
+    defaultValues: project ? { name: project.name, customerId: project.customerId ?? "", status: project.status } : { name: "", customerId: "", status: "active" },
     mode: "onTouched",
   });
 
   function onSubmit(values: ProjectFormOutput) {
+    if (project) {
+      const updated = actions.updateProject(project.id, { name: values.name, customerId: values.customerId || null, status: values.status });
+      if (!updated.ok) {
+        setError("name", { message: updated.error });
+        return;
+      }
+      toast.success("Project updated", `“${updated.value.name}” was saved.`);
+      onDone();
+      return;
+    }
     const r = actions.addProject({ name: values.name, customerId: values.customerId || null, status: values.status });
     if (!r.ok) {
       setError("name", { message: r.error });
@@ -59,6 +70,7 @@ function Form({ onDone }: { onDone: (projectId?: string) => void }) {
           <select id="ap-pstatus" className={selectCls} {...register("status")}>
             <option value="active">Active</option>
             <option value="planning">Planning</option>
+            {project && <option value="completed">Completed</option>}
           </select>
         </Field>
       </div>
@@ -66,22 +78,24 @@ function Form({ onDone }: { onDone: (projectId?: string) => void }) {
         <Button type="button" variant="outline" onClick={() => onDone()}>
           Cancel
         </Button>
-        <Button type="submit">Create project</Button>
+        <Button type="submit">{project ? "Save changes" : "Create project"}</Button>
       </DialogFooter>
     </form>
   );
 }
 
-export function AddProjectDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated?: (projectId: string) => void }) {
+export function AddProjectDialog({ open, onOpenChange, onCreated, project }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated?: (projectId: string) => void; project?: Project }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>New project</DialogTitle>
+          <DialogTitle>{project ? "Edit project" : "New project"}</DialogTitle>
           <DialogDescription>Projects group tasks. You can assign tasks to anyone on your team.</DialogDescription>
         </DialogHeader>
         {open && (
           <Form
+            key={project?.id ?? "new"}
+            project={project}
             onDone={(id) => {
               onOpenChange(false);
               if (id) onCreated?.(id);

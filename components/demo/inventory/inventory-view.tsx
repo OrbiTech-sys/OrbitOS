@@ -51,7 +51,7 @@ export function InventoryView() {
   function reorderAll() {
     let created = 0;
     for (const p of low) if (actions.createReorderTask(p.id).ok) created += 1;
-    if (created > 0) toast.success(`${created} reorder task${created === 1 ? "" : "s"} created`, "Find them in Projects under “Q4 inventory restock”.");
+    if (created > 0) toast.success(`${created} reorder task${created === 1 ? "" : "s"} created`, "Find them in Projects.");
     else toast.info("Nothing new to create", "Reorder tasks already exist for every low-stock product.");
   }
 
@@ -136,7 +136,7 @@ export function InventoryView() {
             <ClipboardPlus /> Create reorder tasks
           </Button>
         </div>
-      ) : (
+      ) : data.products.length === 0 ? null : (
         <p role="status" className="mb-6 rounded-2xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-medium text-success">
           All products are at or above their stock thresholds.
         </p>
@@ -185,12 +185,18 @@ export function InventoryView() {
           pageSize={12}
           empty={
             <EmptyState
-              title="No products match"
-              description="Adjust your filters or add a new product."
+              title={data.products.length ? "No products match" : "No products yet"}
+              description={data.products.length ? "Adjust your filters or add a new product." : "Add what you sell, and stock warnings follow from each product's own threshold."}
               action={
-                <Button variant="outline" onClick={() => { setQuery(""); setCategory("all"); setStatus("all"); }}>
-                  Clear filters
-                </Button>
+                data.products.length ? (
+                  <Button variant="outline" onClick={() => { setQuery(""); setCategory("all"); setStatus("all"); }}>
+                    Clear filters
+                  </Button>
+                ) : (
+                  <Button onClick={() => setAddOpen(true)}>
+                    <PackagePlus /> Add product
+                  </Button>
+                )
               }
             />
           }

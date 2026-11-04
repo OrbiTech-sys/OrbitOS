@@ -2,8 +2,9 @@
 
 import { Link } from "@/components/demo/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, CalendarClock, CircleCheck, FilePlus2, Plus, Send, Target, XCircle } from "lucide-react";
+import { ArrowRight, CalendarClock, CircleCheck, FilePlus2, Plus, Send, Target, Trash2, XCircle } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/demo/confirm-dialog";
 import { SalesDocDialog } from "@/components/demo/sales-doc-dialog";
 import { useToast } from "@/components/demo/toast";
 import { Card, DataTable, EmptyState, FilterChips, PageHeader, SearchField, StatCard, type Column } from "@/components/demo/ui";
@@ -37,6 +38,8 @@ export function SalesView() {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [orderOpen, setOrderOpen] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const deleting = deletingId ? lookups.quotations.get(deletingId) : undefined;
 
   const m = useMemo(() => computeMetrics(data, today), [data, today]);
   const sentQuotes = data.quotations.filter((q) => q.status === "sent");
@@ -97,30 +100,34 @@ export function SalesView() {
       header: "Actions",
       align: "right",
       cell: (q) => {
-        if (q.status === "draft")
-          return (
-            <Button variant="outline" size="sm" onClick={() => { actions.setQuotationStatus(q.id, "sent"); toast.success(`${q.number} marked as sent`, demo ? "Demo only: nothing was emailed." : "Nothing is emailed from OrbitOS yet."); }}>
-              <Send /> Send
-            </Button>
-          );
-        if (q.status === "sent")
-          return (
-            <div className="flex justify-end gap-1.5">
-              <Button size="sm" onClick={() => accept(q)}>
-                <CircleCheck /> <span className="hidden xl:inline">Accept &amp;</span> order
-              </Button>
-              <Button variant="ghost" size="icon-sm" aria-label={`Decline ${q.number}`} onClick={() => { actions.setQuotationStatus(q.id, "declined"); toast.info(`${q.number} declined`); }}>
-                <XCircle />
-              </Button>
-            </div>
-          );
         if (q.orderId)
           return (
             <Button variant="ghost" size="sm" onClick={() => openRecord({ kind: "order", id: q.orderId! }, "/demo/orders")}>
               {lookups.orders.get(q.orderId)?.number} <ArrowRight />
             </Button>
           );
-        return <span className="text-xs text-muted-foreground">—</span>;
+        return (
+          <div className="flex justify-end gap-1.5">
+            {q.status === "draft" && (
+              <Button variant="outline" size="sm" onClick={() => { actions.setQuotationStatus(q.id, "sent"); toast.success(`${q.number} marked as sent`, demo ? "Demo only: nothing was emailed." : "Nothing is emailed from OrbitOS yet."); }}>
+                <Send /> Send
+              </Button>
+            )}
+            {q.status === "sent" && (
+              <>
+                <Button size="sm" onClick={() => accept(q)}>
+                  <CircleCheck /> <span className="hidden xl:inline">Accept &amp;</span> order
+                </Button>
+                <Button variant="ghost" size="icon-sm" aria-label={`Decline ${q.number}`} onClick={() => { actions.setQuotationStatus(q.id, "declined"); toast.info(`${q.number} declined`); }}>
+                  <XCircle />
+                </Button>
+              </>
+            )}
+            <Button variant="ghost" size="icon-sm" className="text-danger hover:bg-danger-soft hover:text-danger" aria-label={`Delete ${q.number}`} onClick={() => setDeletingId(q.id)}>
+              <Trash2 />
+            </Button>
+          </div>
+        );
       },
     },
   ];
@@ -190,7 +197,7 @@ export function SalesView() {
               rows={rows}
               rowKey={(q) => q.id}
               initialSort={{ key: "date", dir: "desc" }}
-              empty={<EmptyState title="No quotations match" description="Try a different status, or create a new quotation." action={<Button onClick={() => setQuoteOpen(true)}><FilePlus2 /> New quotation</Button>} />}
+              empty={<EmptyState title={data.quotations.length ? "No quotations match" : "No quotations yet"} description={data.quotations.length ? "Try a different status, or create a new quotation." : "Quotations you create appear here, ready to turn into orders."} action={<Button onClick={() => setQuoteOpen(true)}><FilePlus2 /> New quotation</Button>} />}
             />
           </TabsContent>
 
@@ -254,6 +261,7 @@ export function SalesView() {
           </Link>
         }
       >
+        {recentOrders.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">No orders yet.</p>}
         <ul className="divide-y">
           {recentOrders.map((o) => (
             <li key={o.id}>
@@ -274,6 +282,21 @@ export function SalesView() {
 
       <SalesDocDialog mode="order" open={orderOpen} onOpenChange={setOrderOpen} />
       <SalesDocDialog mode="quotation" open={quoteOpen} onOpenChange={setQuoteOpen} />
+      <ConfirmDialog
+        open={!!deleting}
+        title={`Delete ${deleting?.number ?? "this quotation"}?`}
+        description="This permanently removes the quotation. It can't be undone."
+        confirmLabel="Delete quotation"
+        onCancel={() => setDeletingId(null)}
+        onConfirm={() => {
+          if (deleting) {
+            const r = actions.deleteQuotation(deleting.id);
+            if (r.ok) toast.info(`${deleting.number} deleted`);
+            else toast.error("Could not delete the quotation", r.error);
+          }
+          setDeletingId(null);
+        }}
+      />
     </>
   );
 }

@@ -21,6 +21,9 @@ const saved = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle:
 
 const ACTION_LABELS: Record<string, string> = {
   "user.created": "added",
+  "user.details_changed": "edited the details of",
+  "site.content_updated": "edited the website section",
+  "site.content_reset": "reset the website section",
   "user.role_changed": "changed the role of",
   "user.password_reset": "reset the password of",
   "user.deactivated": "deactivated",
@@ -63,14 +66,12 @@ export function UsersPanel({
   accounts,
   error,
   latencyMs,
-  host,
   activity,
 }: {
   actor: CurrentUser;
   accounts: Account[];
   error: string | null;
   latencyMs: number;
-  host: string;
   activity: AuditEntry[];
 }) {
   const assignable = rolesActorCanAssign(actor);
@@ -91,8 +92,8 @@ export function UsersPanel({
           <h2 className="text-lg font-semibold tracking-tight">Users &amp; access</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             {actor.role === "super_admin"
-              ? "Add people, change roles, reset passwords, set storage limits and deactivate or delete accounts."
-              : "Add members, deactivate, reactivate or delete them, and see how much storage each one uses. A super admin manages everything else."}
+              ? "Add people, edit their details, change roles, reset passwords, set storage limits and deactivate or delete accounts."
+              : "Add and edit members, deactivate, reactivate or delete them, and see how much storage each one uses. A super admin manages everything else."}
           </p>
         </div>
         {assignable.length > 0 && <AddUserDialog roles={assignable} />}
@@ -115,7 +116,6 @@ export function UsersPanel({
           <span className="inline-flex items-center gap-1.5">
             <ShieldCheck className="size-3.5" aria-hidden="true" /> You: {ROLE_LABELS[actor.role]}
           </span>
-          <span className="max-w-56 truncate">{error ?? host}</span>
         </div>
       </section>
 
@@ -165,7 +165,7 @@ export function UsersPanel({
                     <td className="px-3 py-3 text-right">
                       {(can.usage || can.lifecycle || can.role || can.password || can.storageLimit) && (
                         <UserActionsMenu
-                          user={{ id: a.id, name, email: a.email, role: a.role, active: !a.deactivated_at, bytes: a.bytes, records: a.records, quotaBytes: a.storage_quota_bytes }}
+                          user={{ id: a.id, name, fullName: a.full_name, email: a.email, role: a.role, active: !a.deactivated_at, bytes: a.bytes, records: a.records, quotaBytes: a.storage_quota_bytes }}
                           can={can}
                         />
                       )}

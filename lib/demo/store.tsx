@@ -253,31 +253,54 @@ export interface NewQuotationInput {
   send: boolean;
 }
 
+export type ContactPatch = Partial<NewContactInput>;
+export type ProductPatch = Partial<Omit<NewProductInput, "stock">>;
+export type TeamMemberPatch = Partial<NewTeamMemberInput>;
+export type ProjectPatch = Partial<Pick<Project, "name" | "customerId" | "status">>;
+export type TaskPatch = Partial<Pick<Task, "title" | "projectId" | "assigneeId" | "priority" | "dueDate">>;
+export type ExpensePatch = Partial<NewExpenseInput>;
+
 export interface DemoActions {
   addContact(input: NewContactInput): ActionResult<Contact>;
   setContactStage(id: EntityId, stage: ContactStage): void;
-  updateContact(id: EntityId, patch: Partial<Pick<Contact, "followUpDate" | "notes" | "dealValue">>): void;
+  updateContact(id: EntityId, patch: ContactPatch): void;
+  deleteContact(id: EntityId): ActionResult;
   logContactActivity(id: EntityId): void;
 
   createOrder(input: NewOrderInput): ActionResult<Order>;
   setOrderStatus(id: EntityId, status: OrderStatus): ActionResult;
+  deleteOrder(id: EntityId): ActionResult;
   createInvoiceForOrder(orderId: EntityId): ActionResult<Invoice>;
 
   createQuotation(input: NewQuotationInput): ActionResult<Quotation>;
   setQuotationStatus(id: EntityId, status: QuotationStatus): void;
   convertQuotationToOrder(id: EntityId): ActionResult<Order>;
+  deleteQuotation(id: EntityId): ActionResult;
 
   markInvoicePaid(id: EntityId): void;
+  markInvoiceUnpaid(id: EntityId): void;
+  deleteInvoice(id: EntityId): ActionResult;
   addExpense(input: NewExpenseInput): ActionResult<Expense>;
+  updateExpense(id: EntityId, patch: ExpensePatch): ActionResult<Expense>;
+  deleteExpense(id: EntityId): ActionResult;
 
   addProduct(input: NewProductInput): ActionResult<Product>;
+  updateProduct(id: EntityId, patch: ProductPatch): ActionResult<Product>;
+  deleteProduct(id: EntityId): ActionResult;
   adjustStock(productId: EntityId, delta: number, reason: string): ActionResult<Product>;
   setThreshold(productId: EntityId, threshold: number): void;
   createReorderTask(productId: EntityId): ActionResult<Task>;
 
   addProject(input: NewProjectInput): ActionResult<Project>;
+  updateProject(id: EntityId, patch: ProjectPatch): ActionResult<Project>;
+  deleteProject(id: EntityId): ActionResult;
   addTeamMember(input: NewTeamMemberInput): ActionResult<TeamMember>;
+  updateTeamMember(id: EntityId, patch: TeamMemberPatch): ActionResult<TeamMember>;
+  /** Their contacts, projects and tasks pass to the workspace's owner. */
+  deleteTeamMember(id: EntityId): ActionResult;
   addTask(input: NewTaskInput): ActionResult<Task>;
+  updateTask(id: EntityId, patch: TaskPatch): ActionResult<Task>;
+  deleteTask(id: EntityId): ActionResult;
   setTaskStatus(id: EntityId, status: TaskStatus): void;
 
   markNotificationsRead(ids: string[]): void;
@@ -289,6 +312,20 @@ export interface DemoActions {
 }
 
 const TERMS_DAYS = 30;
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+
+/** Drops the drawer for a record that was just deleted. */
+const closeIfOpen = (state: DemoState, kind: RecordKind, id: EntityId): DemoState =>
+  state.openRecord?.kind === kind && state.openRecord.id === id ? { ...state, openRecord: null } : state;
 
 function buildLines(state: DemoState, inputs: { productId: EntityId; quantity: number }[]): ActionResult<LineItem[]> {
   const products = indexById(state.data.products);
@@ -435,6 +472,32 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
       }));
     },
 
+    deleteContact(id) {
+      const { data } = get();
+      const contact = data.contacts.find((c) => c.id === id);
+      if (!contact) return fail("Contact not found.");
+      const orders = data.orders.filter((o) => o.customerId === id).length;
+      const quotations = data.quotations.filter((q) => q.customerId === id).length;
+      const invoices = data.invoices.filter((i) => i.customerId === id).length;
+      if (orders + quotations + invoices > 0) {
+        const parts = [orders && plural(orders, "order"), quotations && plural(quotations, "quotation"), invoices && plural(invoices, "invoice")].filter(Boolean);
+        return fail(`${contact.name} still has ${parts.join(", ")}. Delete those first, or mark the contact as lost.`);
+      }
+      store.update((state) => {
+        const next: DemoState = {
+          ...closeIfOpen(state, "contact", id),
+          data: {
+            ...state.data,
+            contacts: state.data.contacts.filter((c) => c.id !== id),
+            // A project can outlive its customer: it becomes an internal project.
+            projects: state.data.projects.map((p) => (p.customerId === id ? { ...p, customerId: null } : p)),
+          },
+        };
+        return act(next, "contact", `Contact deleted: ${contact.name} (${contact.company})`, "/demo/crm");
+      });
+      return ok(undefined);
+    },
+
     logContactActivity(id) {
       store.update((state) => {
         const contact = state.data.contacts.find((c) => c.id === id);
@@ -512,6 +575,28 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
           status === "cancelled" ? `Order ${order.number} cancelled; stock returned to inventory` : `Order ${order.number} marked ${status}`,
           "/demo/orders",
         );
+      });
+      return ok(undefined);
+    },
+
+    deleteOrder(id) {
+      const { data } = get();
+      const order = data.orders.find((o) => o.id === id);
+      if (!order) return fail("Order not found.");
+      if (order.invoiceId) return fail(`${order.number} has an invoice. Delete the invoice first.`);
+      store.update((state) => {
+        // An order that was never cancelled still holds its stock, so give it back.
+        const restock = order.status === "cancelled" ? new Map<EntityId, number>() : new Map(order.lines.map((l) => [l.productId, l.quantity]));
+        const next: DemoState = {
+          ...closeIfOpen(state, "order", id),
+          data: {
+            ...state.data,
+            orders: state.data.orders.filter((o) => o.id !== id),
+            products: restock.size ? state.data.products.map((p) => (restock.has(p.id) ? { ...p, stock: p.stock + (restock.get(p.id) ?? 0) } : p)) : state.data.products,
+            quotations: state.data.quotations.map((q) => (q.orderId === id ? { ...q, orderId: null } : q)),
+          },
+        };
+        return act(next, "order", `Order ${order.number} deleted${restock.size ? "; stock returned to inventory" : ""}`, "/demo/orders");
       });
       return ok(undefined);
     },
@@ -608,6 +693,17 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
       return created ? ok(created as Order) : fail("Could not create the order.");
     },
 
+    deleteQuotation(id) {
+      const q = get().data.quotations.find((x) => x.id === id);
+      if (!q) return fail("Quotation not found.");
+      if (q.orderId) return fail(`${q.number} became an order. Delete the order first.`);
+      store.update((state) => {
+        const next: DemoState = { ...closeIfOpen(state, "quotation", id), data: { ...state.data, quotations: state.data.quotations.filter((x) => x.id !== id) } };
+        return act(next, "quotation", `Quotation ${q.number} deleted`, "/demo/sales");
+      });
+      return ok(undefined);
+    },
+
     markInvoicePaid(id) {
       store.update((state) => {
         const inv = state.data.invoices.find((i) => i.id === id);
@@ -623,6 +719,35 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
       });
     },
 
+    markInvoiceUnpaid(id) {
+      store.update((state) => {
+        const inv = state.data.invoices.find((i) => i.id === id);
+        if (!inv || inv.status === "unpaid") return state;
+        const next: DemoState = {
+          ...state,
+          data: { ...state.data, invoices: state.data.invoices.map((i) => (i.id === id ? { ...i, status: "unpaid" as const, paidDate: null } : i)) },
+        };
+        return act(next, "payment", `Invoice ${inv.number} marked as unpaid`, "/demo/finance", actors.finance);
+      });
+    },
+
+    deleteInvoice(id) {
+      const inv = get().data.invoices.find((i) => i.id === id);
+      if (!inv) return fail("Invoice not found.");
+      store.update((state) => {
+        const next: DemoState = {
+          ...closeIfOpen(state, "invoice", id),
+          data: {
+            ...state.data,
+            invoices: state.data.invoices.filter((i) => i.id !== id),
+            orders: state.data.orders.map((o) => (o.invoiceId === id ? { ...o, invoiceId: null } : o)),
+          },
+        };
+        return act(next, "invoice", `Invoice ${inv.number} deleted`, "/demo/finance", actors.finance);
+      });
+      return ok(undefined);
+    },
+
     addExpense(input) {
       let created: Expense | null = null;
       store.update((state) => {
@@ -632,6 +757,32 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
         return act(next, "expense", `Expense recorded: ${input.vendor.trim()} (${input.category})`, "/demo/finance", actors.finance);
       });
       return created ? ok(created as Expense) : fail("Could not add the expense.");
+    },
+
+    updateExpense(id, patch) {
+      const current = get().data.expenses.find((e) => e.id === id);
+      if (!current) return fail("Expense not found.");
+      const updated: Expense = {
+        ...current,
+        ...patch,
+        vendor: (patch.vendor ?? current.vendor).trim(),
+        description: (patch.description ?? current.description).trim(),
+      };
+      store.update((state) => {
+        const next: DemoState = { ...state, data: { ...state.data, expenses: state.data.expenses.map((e) => (e.id === id ? updated : e)) } };
+        return act(next, "expense", `Expense updated: ${updated.vendor} (${updated.category})`, "/demo/finance", actors.finance);
+      });
+      return ok(updated);
+    },
+
+    deleteExpense(id) {
+      const current = get().data.expenses.find((e) => e.id === id);
+      if (!current) return fail("Expense not found.");
+      store.update((state) => {
+        const next: DemoState = { ...state, data: { ...state.data, expenses: state.data.expenses.filter((e) => e.id !== id) } };
+        return act(next, "expense", `Expense deleted: ${current.vendor} (${current.category})`, "/demo/finance", actors.finance);
+      });
+      return ok(undefined);
     },
 
     addProduct(input) {
@@ -647,6 +798,44 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
         return act(next, "inventory", `Product added: ${created.name} (${created.sku})`, "/demo/inventory", actors.inventory);
       });
       return created ? ok(created as Product) : fail("Could not add the product.");
+    },
+
+    updateProduct(id, patch) {
+      const { data } = get();
+      const current = data.products.find((p) => p.id === id);
+      if (!current) return fail("Product not found.");
+      const sku = (patch.sku ?? current.sku).trim().toUpperCase();
+      if (data.products.some((p) => p.id !== id && p.sku.toLowerCase() === sku.toLowerCase())) return fail(`SKU ${sku} already exists.`);
+      const updated: Product = {
+        ...current,
+        ...patch,
+        name: (patch.name ?? current.name).trim(),
+        sku,
+        supplier: (patch.supplier ?? current.supplier).trim() || "Unassigned",
+      };
+      store.update((state) => {
+        const next: DemoState = { ...state, data: { ...state.data, products: state.data.products.map((p) => (p.id === id ? updated : p)) } };
+        return act(next, "inventory", `Product updated: ${updated.name} (${updated.sku})`, "/demo/inventory", actors.inventory);
+      });
+      return ok(updated);
+    },
+
+    deleteProduct(id) {
+      const { data } = get();
+      const product = data.products.find((p) => p.id === id);
+      if (!product) return fail("Product not found.");
+      const usedBy = (lines: LineItem[]) => lines.some((l) => l.productId === id);
+      const orders = data.orders.filter((o) => usedBy(o.lines)).length;
+      const quotations = data.quotations.filter((q) => usedBy(q.lines)).length;
+      if (orders + quotations > 0) {
+        const parts = [orders && plural(orders, "order"), quotations && plural(quotations, "quotation")].filter(Boolean);
+        return fail(`${product.name} is on ${parts.join(" and ")}, which need its details. Delete those first.`);
+      }
+      store.update((state) => {
+        const next: DemoState = { ...closeIfOpen(state, "product", id), data: { ...state.data, products: state.data.products.filter((p) => p.id !== id) } };
+        return act(next, "inventory", `Product deleted: ${product.name} (${product.sku})`, "/demo/inventory", actors.inventory);
+      });
+      return ok(undefined);
     },
 
     adjustStock(productId, delta, reason) {
@@ -733,6 +922,37 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
       return created ? ok(created as Project) : fail("Could not add the project.");
     },
 
+    updateProject(id, patch) {
+      const { data } = get();
+      const current = data.projects.find((p) => p.id === id);
+      if (!current) return fail("Project not found.");
+      const name = (patch.name ?? current.name).trim();
+      if (!name) return fail("Give the project a name.");
+      if (data.projects.some((p) => p.id !== id && p.name.toLowerCase() === name.toLowerCase())) return fail(`A project called ${name} already exists.`);
+      const updated: Project = { ...current, ...patch, name };
+      store.update((state) => {
+        const next: DemoState = { ...state, data: { ...state.data, projects: state.data.projects.map((p) => (p.id === id ? updated : p)) } };
+        return act(next, "task", `Project updated: ${name}`, "/demo/projects");
+      });
+      return ok(updated);
+    },
+
+    deleteProject(id) {
+      const { data } = get();
+      const project = data.projects.find((p) => p.id === id);
+      if (!project) return fail("Project not found.");
+      store.update((state) => {
+        const removed = new Set(state.data.tasks.filter((t) => t.projectId === id).map((t) => t.id));
+        const base = state.openRecord?.kind === "task" && removed.has(state.openRecord.id) ? { ...state, openRecord: null } : state;
+        const next: DemoState = {
+          ...base,
+          data: { ...state.data, projects: state.data.projects.filter((p) => p.id !== id), tasks: state.data.tasks.filter((t) => t.projectId !== id) },
+        };
+        return act(next, "task", `Project deleted: ${project.name}, with ${plural(removed.size, "task")}`, "/demo/projects");
+      });
+      return ok(undefined);
+    },
+
     addTeamMember(input) {
       const name = input.name.trim();
       if (!name) return fail("Enter a name.");
@@ -741,13 +961,55 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
       let created: TeamMember | null = null;
       store.update((state) => {
         const { id, counters } = newId(state, "team", "tm");
-        const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+        const initials = initialsOf(name);
         const tones = ["indigo", "sky", "emerald", "amber", "rose", "violet"] as const;
         created = { id, name, role: input.role.trim() || "Team member", email, initials, tone: tones[state.data.team.length % tones.length] };
         const next: DemoState = { ...state, counters, data: { ...state.data, team: [...state.data.team, created] } };
         return act(next, "system", `${name} was added to the team`, "/demo/team");
       });
       return created ? ok(created as TeamMember) : fail("Could not add the team member.");
+    },
+
+    updateTeamMember(id, patch) {
+      const { data } = get();
+      const current = data.team.find((t) => t.id === id);
+      if (!current) return fail("Team member not found.");
+      const name = (patch.name ?? current.name).trim();
+      if (!name) return fail("Enter a name.");
+      const email = (patch.email ?? current.email).trim();
+      if (email && data.team.some((t) => t.id !== id && t.email.toLowerCase() === email.toLowerCase())) return fail(`${email} is already on the team.`);
+      const updated: TeamMember = { ...current, name, email, role: (patch.role ?? current.role).trim() || "Team member", initials: initialsOf(name) };
+      store.update((state) => {
+        const next: DemoState = { ...state, data: { ...state.data, team: state.data.team.map((t) => (t.id === id ? updated : t)) } };
+        return act(next, "system", `${name}'s details were updated`, "/demo/team");
+      });
+      return ok(updated);
+    },
+
+    deleteTeamMember(id) {
+      const { data } = get();
+      const member = data.team.find((t) => t.id === id);
+      if (!member) return fail("Team member not found.");
+      // The people records are attributed to by default have to stay.
+      if ((Object.values(actors) as EntityId[]).includes(id)) return fail(`${member.name} is the owner of this workspace and can't be removed.`);
+      const heir = actors.default;
+      store.update((state) => {
+        const d = state.data;
+        const next: DemoState = {
+          ...state,
+          data: {
+            ...d,
+            team: d.team.filter((t) => t.id !== id),
+            contacts: d.contacts.map((c) => (c.ownerId === id ? { ...c, ownerId: heir } : c)),
+            projects: d.projects.map((p) => (p.ownerId === id ? { ...p, ownerId: heir } : p)),
+            tasks: d.tasks.map((t) => (t.assigneeId === id ? { ...t, assigneeId: heir } : t)),
+            orders: d.orders.map((o) => (o.createdById === id ? { ...o, createdById: heir } : o)),
+            activities: d.activities.map((a) => (a.actorId === id ? { ...a, actorId: null } : a)),
+          },
+        };
+        return act(next, "system", `${member.name} was removed from the team`, "/demo/team");
+      });
+      return ok(undefined);
     },
 
     addTask(input) {
@@ -759,6 +1021,27 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
         return act(next, "task", `Task added: ${created.title}`, "/demo/projects");
       });
       return created ? ok(created as Task) : fail("Could not add the task.");
+    },
+
+    updateTask(id, patch) {
+      const current = get().data.tasks.find((t) => t.id === id);
+      if (!current) return fail("Task not found.");
+      const updated: Task = { ...current, ...patch, title: (patch.title ?? current.title).trim() };
+      store.update((state) => {
+        const next: DemoState = { ...state, data: { ...state.data, tasks: state.data.tasks.map((t) => (t.id === id ? updated : t)) } };
+        return act(next, "task", `Task updated: ${updated.title}`, "/demo/projects");
+      });
+      return ok(updated);
+    },
+
+    deleteTask(id) {
+      const current = get().data.tasks.find((t) => t.id === id);
+      if (!current) return fail("Task not found.");
+      store.update((state) => {
+        const next: DemoState = { ...closeIfOpen(state, "task", id), data: { ...state.data, tasks: state.data.tasks.filter((t) => t.id !== id) } };
+        return act(next, "task", `Task deleted: ${current.title}`, "/demo/projects");
+      });
+      return ok(undefined);
     },
 
     setTaskStatus(id, status) {
@@ -781,10 +1064,11 @@ export function createActions(store: DemoStore, config: StoreConfig): DemoAction
     },
 
     markNotificationsRead(ids) {
-      store.update((state) => ({
-        ...state,
-        readNotifications: [...new Set([...state.readNotifications, ...ids])],
-      }));
+      store.update((state) => {
+        // Nothing new means no change, and so nothing to save.
+        const fresh = ids.filter((id) => !state.readNotifications.includes(id));
+        return fresh.length === 0 ? state : { ...state, readNotifications: [...state.readNotifications, ...fresh] };
+      });
     },
 
     open(kind, id) {

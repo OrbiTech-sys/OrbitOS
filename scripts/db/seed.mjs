@@ -18,6 +18,7 @@ try {
       email,
       password: env.SUPER_ADMIN_PASSWORD,
       email_confirm: true,
+      app_metadata: { created_by_admin: true },
     });
     if (error) fail(`Could not create ${email}: ${error.message}`);
     userId = data.user.id;

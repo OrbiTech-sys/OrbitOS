@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, CheckCheck, FileText, Mail, Phone, ShoppingCart } from "lucide-react";
+import { CalendarClock, CheckCheck, FileText, Mail, Pencil, Phone, ShoppingCart, Trash2 } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/demo/confirm-dialog";
+import { AddContactDialog } from "@/components/demo/crm/add-contact-dialog";
 import { SalesDocDialog } from "@/components/demo/sales-doc-dialog";
 import { useToast } from "@/components/demo/toast";
 import { DetailList } from "@/components/demo/ui";
@@ -30,6 +32,9 @@ export function ContactDrawer({ contactId, onClose }: { contactId: string | null
   const openRecord = useRecordNav();
   const [quoteFor, setQuoteFor] = useState<string | null>(null);
   const [orderFor, setOrderFor] = useState<string | null>(null);
+  // Tied to the record, so a pending edit or confirmation can't carry over to the next one opened.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const contact = contactId ? lookups.contacts.get(contactId) : undefined;
   const owner = contact ? lookups.team.get(contact.ownerId) : undefined;
@@ -70,6 +75,12 @@ export function ContactDrawer({ contactId, onClose }: { contactId: string | null
                       <ShoppingCart /> Create order
                     </Button>
                   )}
+                  <Button variant="outline" size="sm" onClick={() => setEditingId(contact.id)}>
+                    <Pencil /> Edit
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-danger hover:bg-danger-soft hover:text-danger" onClick={() => setDeletingId(contact.id)}>
+                    <Trash2 /> Delete
+                  </Button>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -111,11 +122,13 @@ export function ContactDrawer({ contactId, onClose }: { contactId: string | null
                   items={[
                     {
                       label: "Email",
-                      value: (
+                      value: contact.email ? (
                         <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1.5 text-primary hover:underline">
                           <Mail className="size-3.5" aria-hidden="true" />
                           {contact.email}
                         </a>
+                      ) : (
+                        "—"
                       ),
                     },
                     {
@@ -207,6 +220,21 @@ export function ContactDrawer({ contactId, onClose }: { contactId: string | null
           )}
         </SheetContent>
       </Sheet>
+      <AddContactDialog open={!!contact && editingId === contact.id} onOpenChange={(o) => !o && setEditingId(null)} contact={contact} />
+      <ConfirmDialog
+        open={!!contact && deletingId === contact.id}
+        title={`Delete ${contact?.name ?? "this contact"}?`}
+        description="This permanently removes the contact. It can't be undone. Contacts with orders, quotations or invoices have to keep them, so delete those first."
+        confirmLabel="Delete contact"
+        onCancel={() => setDeletingId(null)}
+        onConfirm={() => {
+          setDeletingId(null);
+          if (!contact) return;
+          const r = actions.deleteContact(contact.id);
+          if (r.ok) toast.info("Contact deleted", `${contact.name} was removed.`);
+          else toast.error("Could not delete the contact", r.error);
+        }}
+      />
       <SalesDocDialog mode="quotation" open={!!quoteFor} onOpenChange={(o) => !o && setQuoteFor(null)} initialCustomerId={quoteFor ?? undefined} />
       <SalesDocDialog mode="order" open={!!orderFor} onOpenChange={(o) => !o && setOrderFor(null)} initialCustomerId={orderFor ?? undefined} />
     </>

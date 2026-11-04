@@ -8,26 +8,37 @@ import { Section } from "@/components/marketing/section";
 import { StatusBadge } from "@/components/shared/badges";
 import { Icon } from "@/components/shared/icon";
 import { Button } from "@/components/ui/button";
-import { INDUSTRIES } from "@/lib/content/industries";
-import { MODULES, MODULE_BY_SLUG } from "@/lib/content/modules";
+import { DEFAULT_CONTENT } from "@/lib/content/defaults";
+import { bySlug } from "@/lib/content/published";
+import { getSiteContent } from "@/lib/content/store";
 
-export function generateStaticParams() {
-  return MODULES.map((m) => ({ slug: m.slug }));
+// New pages can be added in the Website editor after a build, so an address that wasn't
+// prerendered is rendered on request. It may block for that first visit, which also lets
+// an unknown address return a real 404.
+export const instant = false;
+
+/** Always includes the built-in slugs, so a build never ends up with nothing to prerender. */
+export async function generateStaticParams() {
+  const { modules } = await getSiteContent();
+  const slugs = new Set([...modules, ...DEFAULT_CONTENT.modules].map((m) => m.slug));
+  return [...slugs].map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/product/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const m = MODULE_BY_SLUG[slug];
+  const { modules } = await getSiteContent();
+  const m = bySlug(modules, slug);
   return m ? { title: m.name, description: `${m.tagline}. ${m.benefit}` } : {};
 }
 
 export default async function ProductPage({ params }: PageProps<"/product/[slug]">) {
   const { slug } = await params;
-  const m = MODULE_BY_SLUG[slug];
+  const content = await getSiteContent();
+  const m = bySlug(content.modules, slug);
   if (!m) notFound();
 
-  const related = MODULES.filter((x) => x.slug !== m.slug).slice(0, 4);
-  const industries = INDUSTRIES.filter((i) => i.modules.includes(m.slug));
+  const related = content.modules.filter((x) => x.slug !== m.slug).slice(0, 4);
+  const industries = content.industries.filter((i) => i.modules.includes(m.slug));
 
   return (
     <>
@@ -38,16 +49,16 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
         crumbs={[{ href: "/#modules", label: "Product" }, { label: m.name }]}
       >
         <div className="flex flex-wrap items-center gap-3">
-          <StatusBadge tone={m.availability === "Interactive demo" ? "success" : m.availability === "Concept preview" ? "info" : "neutral"}>{m.availability}</StatusBadge>
+          <StatusBadge tone={m.availability === "Available" ? "success" : m.availability === "Preview" ? "info" : "neutral"}>{m.availability}</StatusBadge>
           {m.demoHref && (
             <Button asChild variant="navy" size="lg">
               <Link href={m.demoHref}>
-                Open {m.name} in the live demo <ArrowRight />
+                Try {m.name} in the live demo <ArrowRight />
               </Link>
             </Button>
           )}
           <Button asChild variant="outline" size="lg">
-            <Link href="/waitlist">Join the waitlist</Link>
+            <Link href="/waitlist">Request access</Link>
           </Button>
         </div>
       </PageHero>
@@ -84,12 +95,14 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
           </article>
         </div>
 
-        <p className="mt-6 flex items-start gap-2.5 rounded-xl border border-dashed bg-muted/60 px-4 py-3.5 text-sm leading-relaxed text-muted-foreground">
-          <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>
-            <strong className="font-semibold text-foreground">In this proof of concept:</strong> {m.pocNote}
-          </span>
-        </p>
+        {m.note && (
+          <p className="mt-6 flex items-start gap-2.5 rounded-xl border border-dashed bg-muted/60 px-4 py-3.5 text-sm leading-relaxed text-muted-foreground">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>
+              <strong className="font-semibold text-foreground">Good to know:</strong> {m.note}
+            </span>
+          </p>
+        )}
 
         {industries.length > 0 && (
           <div className="mt-14">

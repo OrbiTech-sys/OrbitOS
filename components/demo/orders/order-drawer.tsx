@@ -2,8 +2,9 @@
 
 import { Link } from "@/components/demo/link";
 import { useState } from "react";
-import { ArrowRight, Check, FileText, Receipt, Truck, XCircle } from "lucide-react";
+import { ArrowRight, Check, FileText, Receipt, Trash2, Truck, XCircle } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/demo/confirm-dialog";
 import { DetailList } from "@/components/demo/ui";
 import { useToast } from "@/components/demo/toast";
 import { InvoiceStatusBadge, OrderStatusBadge, orderStatusLabel } from "@/components/shared/badges";
@@ -28,6 +29,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
   const toast = useToast();
   const demo = useIsDemo();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const order = orderId ? lookups.orders.get(orderId) : undefined;
   const customer = order ? lookups.contacts.get(order.customerId) : undefined;
@@ -36,6 +38,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
   const currentIdx = order ? FLOW.indexOf(order.status) : -1;
 
   return (
+    <>
     <Sheet
       open={!!order}
       onOpenChange={(o) => {
@@ -185,6 +188,10 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
                   </div>
                 )}
               </section>
+
+              <Button variant="ghost" size="sm" className="text-danger hover:bg-danger-soft hover:text-danger" onClick={() => setDeletingId(order.id)}>
+                <Trash2 /> Delete order
+              </Button>
             </div>
 
             {order.status !== "cancelled" && order.status !== "delivered" && (
@@ -235,5 +242,20 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
         )}
       </SheetContent>
     </Sheet>
+    <ConfirmDialog
+      open={!!order && deletingId === order.id}
+      title={`Delete ${order?.number ?? "this order"}?`}
+      description={order?.status === "cancelled" ? "This permanently removes the order. It can't be undone." : "This permanently removes the order and returns its stock to inventory. It can't be undone."}
+      confirmLabel="Delete order"
+      onCancel={() => setDeletingId(null)}
+      onConfirm={() => {
+        setDeletingId(null);
+        if (!order) return;
+        const r = actions.deleteOrder(order.id);
+        if (r.ok) toast.info(`${order.number} deleted`, order.status === "cancelled" ? "The order was removed." : "Stock was returned to inventory.");
+        else toast.error("Could not delete the order", r.error);
+      }}
+    />
+    </>
   );
 }

@@ -35,8 +35,8 @@ type Entry = (RecordKey & { data: Record<string, unknown>; del?: undefined }) | 
 export function createSyncQueue(options: {
   save(changes: Changes): Promise<SaveResult>;
   onState(state: SyncState): void;
-  /** Saving can never succeed (signed out, or the account was deactivated). */
-  onFatal?(code: "auth" | "inactive"): void;
+  /** Saving can never succeed (signed out, a temporary password to replace, or the account was deactivated). */
+  onFatal?(code: "auth" | "password" | "inactive"): void;
   initialUsage?: UsageNumbers | null;
   debounceMs?: number;
   /** Delays between automatic retries after a failure; the last one repeats. */
@@ -98,7 +98,7 @@ export function createSyncQueue(options: {
 
       if (!result.ok) {
         emit({ status: "error", error: result.error });
-        if (result.code === "auth" || result.code === "inactive") options.onFatal?.(result.code);
+        if (result.code === "auth" || result.code === "password" || result.code === "inactive") options.onFatal?.(result.code);
         else if (result.code === "failed") {
           schedule(retryMs[Math.min(attempt, retryMs.length - 1)]);
           attempt++;

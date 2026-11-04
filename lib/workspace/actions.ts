@@ -11,11 +11,17 @@ import type { SaveResult } from "./types";
  * member's own session: the database decides what they may store.
  */
 export async function saveWorkspaceChanges(input: unknown): Promise<SaveResult> {
-  const user = await getCurrentUser();
-  if (!user) return { ok: false, code: "auth", error: "Your session has ended. Sign in again to keep working." };
-  if (!user.active) return { ok: false, code: "inactive", error: "Your account has been deactivated." };
-  if (user.mustChangePassword) return { ok: false, code: "auth", error: "Choose a new password before continuing." };
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, code: "auth", error: "Your session has ended. Sign in again to keep working." };
+    if (!user.active) return { ok: false, code: "inactive", error: "Your account has been deactivated." };
+    if (user.mustChangePassword) return { ok: false, code: "password", error: "Choose a new password before continuing." };
 
-  const supabase = await createSupabaseServerClient();
-  return persistChanges(supabase, user.id, input);
+    const supabase = await createSupabaseServerClient();
+    return await persistChanges(supabase, user.id, input);
+  } catch (error) {
+    // A short outage: keep the changes queued and try again, rather than treating it as signed out.
+    console.error(`Saving workspace changes failed: ${error instanceof Error ? error.message : String(error)}`);
+    return { ok: false, code: "failed", error: "Your changes couldn't be saved. We'll keep trying." };
+  }
 }

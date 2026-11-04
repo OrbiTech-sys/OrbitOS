@@ -64,6 +64,7 @@ export function SignInForm() {
           </>
         )}
       </Button>
+      <p className="text-center text-xs text-muted-foreground">Forgotten your password? Your administrator can reset it for you.</p>
     </form>
   );
 }

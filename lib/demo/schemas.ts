@@ -94,7 +94,7 @@ export const stockAdjustSchema = z.object({
 export type StockAdjustInput = z.input<typeof stockAdjustSchema>;
 export type StockAdjustOutput = z.output<typeof stockAdjustSchema>;
 
-/** Marketing contact / waitlist forms (nothing is transmitted in this proof of concept). */
+/** The website's contact and access-request forms (saved by lib/marketing/actions.ts). */
 export const BUSINESS_TYPES = [
   "Retail and e-commerce",
   "Professional services",
@@ -105,7 +105,7 @@ export const BUSINESS_TYPES = [
   "Other",
 ] as const;
 
-export const CONTACT_TOPICS = ["Early access", "Product demo", "Partnership", "Integration question", "Something else"] as const;
+export const CONTACT_TOPICS = ["Getting access", "Product demo", "Pricing", "Partnership", "Integration question", "Something else"] as const;
 
 export const contactFormSchema = z.object({
   name: requiredText("Name", 80),
@@ -128,7 +128,7 @@ export type WaitlistValues = z.input<typeof waitlistSchema>;
 export const projectSchema = z.object({
   name: requiredText("Project name", 80),
   customerId: z.string(),
-  status: z.enum(["active", "planning"]),
+  status: z.enum(["active", "planning", "completed"]),
 });
 export type ProjectFormInput = z.input<typeof projectSchema>;
 export type ProjectFormOutput = z.output<typeof projectSchema>;

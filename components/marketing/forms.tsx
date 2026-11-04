@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, CheckCircle2, Info, Loader2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 
 import { Field, describedBy } from "@/components/shared/form-field";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   type ContactFormValues,
   type WaitlistValues,
 } from "@/lib/demo/schemas";
+import { submitContactForm, submitWaitlistForm, type SubmitResult } from "@/lib/marketing/actions";
 import { cn } from "@/lib/utils";
 
 const selectClass =
@@ -43,55 +44,85 @@ function Success({ title, children, onReset }: { title: string; children: React.
   );
 }
 
-function PocNote() {
+/** Hidden from people and skipped by keyboards; only bots fill it in. */
+function Honeypot({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <p className="flex items-start gap-2 rounded-xl bg-muted px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
-      <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-      This is a proof of concept with no backend. Submitting validates the form and shows a confirmation, but nothing is stored or sent.
+    <div aria-hidden="true" className="absolute -left-[9999px] size-px overflow-hidden">
+      <label>
+        Website
+        <input type="text" name="website" tabIndex={-1} autoComplete="off" value={value} onChange={(e) => onChange(e.target.value)} />
+      </label>
+    </div>
+  );
+}
+
+function FormError({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-sm font-medium text-danger">
+      {message}
     </p>
   );
 }
 
+/** Puts a server-side refusal back on the form. Returns true when the submission was accepted. */
+function applyResult<T extends string>(result: SubmitResult, setError: (name: T, error: { message: string }) => void, setFormError: (message: string | null) => void) {
+  if (result.ok) return true;
+  for (const [name, message] of Object.entries(result.fieldErrors ?? {})) setError(name as T, { message });
+  setFormError(result.error);
+  return false;
+}
+
 /* --------------------------------------------------------------- Contact -- */
 
-export function ContactForm() {
+export function ContactForm({ successTitle, successBody }: { successTitle: string; successBody: string }) {
   const [sent, setSent] = useState<ContactFormValues | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [website, setWebsite] = useState("");
   const {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors, isSubmitting, submitCount },
   } = useForm<ContactFormValues>({
     resolver: zodResolver(contactFormSchema),
-    defaultValues: { name: "", email: "", company: "", topic: "Early access", message: "" },
+    defaultValues: { name: "", email: "", company: "", topic: "Getting access", message: "" },
     mode: "onTouched",
   });
   const errorCount = Object.keys(errors).length;
 
   async function onSubmit(values: ContactFormValues) {
-    await new Promise((r) => setTimeout(r, 650));
-    setSent(values);
+    setFormError(null);
+    try {
+      const result = await submitContactForm({ ...values, website });
+      if (applyResult<keyof ContactFormValues>(result, setError, setFormError)) setSent(values);
+    } catch {
+      setFormError("We couldn't send that. Check your connection and try again.");
+    }
   }
 
   if (sent) {
     return (
       <Success
-        title={`Thanks, ${sent.name.split(" ")[0]}. That worked.`}
+        title={successTitle}
         onReset={() => {
           reset();
           setSent(null);
         }}
       >
+        <p>{successBody}</p>
         <p>
-          In a production version, your message about “{sent.topic.toLowerCase()}” would reach the team and you would hear back at <strong>{sent.email}</strong>.
+          We have your email as <strong>{sent.email}</strong>.
         </p>
-        <p>In this proof of concept nothing was sent or stored.</p>
       </Success>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5 rounded-2xl border bg-card p-6 shadow-card sm:p-8" aria-label="Contact the team">
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="relative space-y-5 rounded-2xl border bg-card p-6 shadow-card sm:p-8" aria-label="Contact the team">
+      <Honeypot value={website} onChange={setWebsite} />
+      <FormError message={formError} />
       {submitCount > 0 && errorCount > 0 && (
         <p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-sm font-medium text-danger">
           Please fix the {errorCount} highlighted field{errorCount === 1 ? "" : "s"} and try again.
@@ -118,7 +149,13 @@ export function ContactForm() {
       <Field id="c-message" label="How can we help?" error={errors.message?.message} hint="A sentence or two is plenty.">
         <Textarea id="c-message" rows={5} aria-invalid={!!errors.message} aria-describedby={describedBy("c-message", errors.message?.message, "hint")} {...register("message")} />
       </Field>
-      <PocNote />
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        We use what you send only to reply to you. See our{" "}
+        <Link href="/privacy" className="font-medium text-foreground underline-offset-4 hover:underline">
+          privacy notice
+        </Link>
+        .
+      </p>
       <Button type="submit" size="lg" disabled={isSubmitting} className="w-full sm:w-auto">
         {isSubmitting ? (
           <>
@@ -138,12 +175,15 @@ export function ContactForm() {
 
 const TEAM_SIZES = ["1–5", "6–20", "21–100", "100+"] as const;
 
-export function WaitlistForm() {
+export function WaitlistForm({ productName, successTitle, successBody }: { productName: string; successTitle: string; successBody: string }) {
   const [sent, setSent] = useState<WaitlistValues | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [website, setWebsite] = useState("");
   const {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors, isSubmitting, submitCount },
   } = useForm<WaitlistValues>({
     resolver: zodResolver(waitlistSchema),
@@ -153,29 +193,36 @@ export function WaitlistForm() {
   const errorCount = Object.keys(errors).length;
 
   async function onSubmit(values: WaitlistValues) {
-    await new Promise((r) => setTimeout(r, 650));
-    setSent(values);
+    setFormError(null);
+    try {
+      const result = await submitWaitlistForm({ ...values, website });
+      if (applyResult<keyof WaitlistValues>(result, setError, setFormError)) setSent(values);
+    } catch {
+      setFormError("We couldn't send that. Check your connection and try again.");
+    }
   }
 
   if (sent) {
     return (
       <Success
-        title="You're on the (pretend) list"
+        title={successTitle}
         onReset={() => {
           reset();
           setSent(null);
         }}
       >
+        <p>{successBody}</p>
         <p>
-          Thanks, {sent.name.split(" ")[0]}. In a real launch we would use <strong>{sent.email}</strong> to share early-access news for {sent.businessType.toLowerCase()} teams.
+          We have your email as <strong>{sent.email}</strong>.
         </p>
-        <p>In this proof of concept nothing was sent or stored.</p>
       </Success>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5 rounded-2xl border bg-card p-6 shadow-card sm:p-8" aria-label="Join the waitlist">
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="relative space-y-5 rounded-2xl border bg-card p-6 shadow-card sm:p-8" aria-label="Request access">
+      <Honeypot value={website} onChange={setWebsite} />
+      <FormError message={formError} />
       {submitCount > 0 && errorCount > 0 && (
         <p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-sm font-medium text-danger">
           Please fix the {errorCount} highlighted field{errorCount === 1 ? "" : "s"} and try again.
@@ -212,18 +259,24 @@ export function WaitlistForm() {
           </div>
         </fieldset>
       </div>
-      <Field id="w-interest" label="What would you want OrbitOS to take off your plate?" optional error={errors.interest?.message}>
+      <Field id="w-interest" label={`What would you want ${productName} to take off your plate?`} optional error={errors.interest?.message}>
         <Textarea id="w-interest" rows={4} {...register("interest")} />
       </Field>
-      <PocNote />
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        We use what you send only to reply to you. See our{" "}
+        <Link href="/privacy" className="font-medium text-foreground underline-offset-4 hover:underline">
+          privacy notice
+        </Link>
+        .
+      </p>
       <Button type="submit" size="lg" disabled={isSubmitting} className="w-full sm:w-auto">
         {isSubmitting ? (
           <>
-            <Loader2 className="animate-spin" /> Joining…
+            <Loader2 className="animate-spin" /> Sending…
           </>
         ) : (
           <>
-            Request early access <ArrowRight />
+            Request access <ArrowRight />
           </>
         )}
       </Button>

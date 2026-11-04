@@ -1,23 +1,6 @@
-import type { IconName } from "@/components/shared/icon";
+import type { ModuleContent } from "./schema";
 
-export type Availability = "Interactive demo" | "Concept preview" | "Planned";
-
-export interface ModuleContent {
-  slug: string;
-  name: string;
-  /** One line used in menus. */
-  tagline: string;
-  icon: IconName;
-  problem: string;
-  functionality: string[];
-  benefit: string;
-  availability: Availability;
-  /** Where the module can be tried in the demo (if anywhere). */
-  demoHref: string | null;
-  /** Honest note about what is and is not implemented in this proof of concept. */
-  pocNote: string;
-}
-
+/** The built-in product modules. The super admin can change all of this under Settings → Website. */
 export const MODULES: ModuleContent[] = [
   {
     slug: "crm",
@@ -32,9 +15,10 @@ export const MODULES: ModuleContent[] = [
       "Search and stage filters",
     ],
     benefit: "A shared view of every relationship and what to do next.",
-    availability: "Interactive demo",
+    availability: "Available",
     demoHref: "/demo/crm",
-    pocNote: "Add, search, filter and update contacts in the live demo. Data stays in your browser.",
+    note: "Add, edit, search and remove contacts in your own workspace, or try it first in the live demo.",
+    visible: true,
   },
   {
     slug: "sales",
@@ -49,9 +33,10 @@ export const MODULES: ModuleContent[] = [
       "Create-order flow with stock checks",
     ],
     benefit: "One record flows from quote to order to invoice without re-entry.",
-    availability: "Interactive demo",
+    availability: "Available",
     demoHref: "/demo/orders",
-    pocNote: "Create orders and convert quotations in the demo; stock and dashboard metrics update immediately.",
+    note: "Creating an order reserves stock and updates your dashboard straight away. Nothing is emailed to customers from OrbitOS yet.",
+    visible: true,
   },
   {
     slug: "inventory",
@@ -66,9 +51,10 @@ export const MODULES: ModuleContent[] = [
       "Low-stock and out-of-stock warnings",
     ],
     benefit: "Spot shortages before they turn into missed orders.",
-    availability: "Interactive demo",
+    availability: "Available",
     demoHref: "/demo/inventory",
-    pocNote: "Adjust stock and watch warnings, dashboards and the copilot respond to each product's own threshold.",
+    note: "Warnings, dashboards and the assistant all respond to each product's own threshold.",
+    visible: true,
   },
   {
     slug: "finance",
@@ -83,10 +69,10 @@ export const MODULES: ModuleContent[] = [
       "Revenue versus expense trend",
     ],
     benefit: "See what is owed and what is coming without a month-end scramble.",
-    availability: "Interactive demo",
+    availability: "Available",
     demoHref: "/demo/finance",
-    pocNote:
-      "Illustrative finance views only. No payments, bank connections, tax calculations or certified accounting are implemented.",
+    note: "Keeps your records only. OrbitOS does not process payments, connect to banks, calculate tax or produce certified accounts.",
+    visible: true,
   },
   {
     slug: "projects",
@@ -101,9 +87,10 @@ export const MODULES: ModuleContent[] = [
       "One-click completion",
     ],
     benefit: "Clear ownership and visible deadlines for the whole team.",
-    availability: "Interactive demo",
+    availability: "Available",
     demoHref: "/demo/projects",
-    pocNote: "Create and complete tasks in the demo; dashboard counts and notifications update accordingly.",
+    note: "Dashboard counts and notifications update as tasks are added and completed.",
+    visible: true,
   },
   {
     slug: "team",
@@ -117,9 +104,10 @@ export const MODULES: ModuleContent[] = [
       "Ownership shown on contacts and tasks",
     ],
     benefit: "Balanced workloads and clear accountability.",
-    availability: "Interactive demo",
+    availability: "Available",
     demoHref: "/demo/team",
-    pocNote: "A read-only team overview computed from the sample data. Roles and permissions are not implemented.",
+    note: "Add, edit and remove the people you track work against. Each workspace belongs to one account, so team members here do not get their own sign-in.",
+    visible: true,
   },
   {
     slug: "automation",
@@ -133,10 +121,10 @@ export const MODULES: ModuleContent[] = [
       "A visible log of what was automated",
     ],
     benefit: "Fewer manual steps and more consistent follow-through.",
-    availability: "Concept preview",
-    demoHref: null,
-    pocNote:
-      "The connected-workflow demo on the homepage shows records updating each other. A configurable rule builder is not part of this proof of concept.",
+    availability: "Preview",
+    demoHref: "",
+    note: "Records already update each other: an order reserves stock and can issue its invoice. A configurable rule builder is still to come.",
+    visible: true,
   },
   {
     slug: "analytics",
@@ -151,9 +139,10 @@ export const MODULES: ModuleContent[] = [
       "Filters for time range and metric",
     ],
     benefit: "Answers when you ask, without exporting to a spreadsheet first.",
-    availability: "Interactive demo",
+    availability: "Available",
     demoHref: "/demo/analytics",
-    pocNote: "Interactive charts built from the demo dataset. Scheduled and exportable reports are not implemented.",
+    note: "Interactive charts built from your own records. Scheduled and exportable reports are not available yet.",
+    visible: true,
   },
   {
     slug: "copilot",
@@ -167,10 +156,10 @@ export const MODULES: ModuleContent[] = [
       "Proactive insights on the dashboard",
     ],
     benefit: "A shorter path from “what is going on?” to “here is what to do”.",
-    availability: "Interactive demo",
+    availability: "Available",
     demoHref: "/demo/copilot",
-    pocNote:
-      "The demo assistant is deterministic and rule-based: it reads the sample dataset locally and does not call an AI model.",
+    note: "The assistant is rule-based: it reads your records on your own device and does not send them to an AI service.",
+    visible: true,
   },
   {
     slug: "integrations",
@@ -184,9 +173,8 @@ export const MODULES: ModuleContent[] = [
     ],
     benefit: "Keep the tools you like and stop copying data between them.",
     availability: "Planned",
-    demoHref: null,
-    pocNote: "No integrations exist yet. This describes the intended direction, not available functionality.",
+    demoHref: "",
+    note: "No integrations exist yet. This describes the intended direction, not available functionality.",
+    visible: true,
   },
 ];
-
-export const MODULE_BY_SLUG = Object.fromEntries(MODULES.map((m) => [m.slug, m])) as Record<string, ModuleContent>;

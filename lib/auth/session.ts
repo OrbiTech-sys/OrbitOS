@@ -36,11 +36,14 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const id = data?.claims?.sub;
   if (!id) return null;
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("email, full_name, role, must_change_password, deactivated_at, storage_quota_bytes")
     .eq("id", id)
     .maybeSingle();
+  // A failed read is not the same as being signed out: let the error page offer a retry
+  // rather than sending someone with a valid session back to the sign-in form.
+  if (error) throw new Error(`Could not read the account: ${error.message}`);
   if (!profile) return null;
 
   return {

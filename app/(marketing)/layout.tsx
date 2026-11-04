@@ -1,7 +1,9 @@
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteHeader } from "@/components/marketing/site-header";
+import { getSiteContent } from "@/lib/content/store";
 
-export default function MarketingLayout({ children }: LayoutProps<"/">) {
+export default async function MarketingLayout({ children }: LayoutProps<"/">) {
+  const content = await getSiteContent();
   return (
     <>
       <a
@@ -10,11 +12,11 @@ export default function MarketingLayout({ children }: LayoutProps<"/">) {
       >
         Skip to content
       </a>
-      <SiteHeader />
+      <SiteHeader brand={content.brand} nav={content.nav} modules={content.modules} solutions={content.solutions} />
       <main id="main" className="flex-1">
         {children}
       </main>
-      <SiteFooter />
+      <SiteFooter content={content} />
     </>
   );
 }

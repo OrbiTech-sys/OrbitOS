@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ClipboardPlus, Minus, Plus } from "lucide-react";
+import { AlertTriangle, ClipboardPlus, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/demo/confirm-dialog";
+import { AddProductDialog } from "@/components/demo/inventory/add-product-dialog";
 import { useToast } from "@/components/demo/toast";
 import { DetailList } from "@/components/demo/ui";
 import { StockStatusBadge } from "@/components/shared/badges";
@@ -18,7 +20,7 @@ import type { Product } from "@/lib/demo/types";
 
 const REASONS = ["Received shipment", "Cycle count correction", "Damaged or returned", "Sample / internal use", "Other"];
 
-function Body({ product, onClose }: { product: Product; onClose: () => void }) {
+function Body({ product, onClose, onEdit, onDelete }: { product: Product; onClose: () => void; onEdit: () => void; onDelete: () => void }) {
   const actions = useDemoActions();
   const money = useMoney();
   const toast = useToast();
@@ -71,7 +73,7 @@ function Body({ product, onClose }: { product: Product; onClose: () => void }) {
 
   function reorder() {
     const r = actions.createReorderTask(product.id);
-    if (r.ok) toast.success("Reorder task created", `Assigned to Daniel Okafor, due ${r.value.dueDate}. See Projects.`);
+    if (r.ok) toast.success("Reorder task created", `Due ${r.value.dueDate}. See Projects.`);
     else toast.info("No new task created", r.error);
   }
 
@@ -154,10 +156,18 @@ function Body({ product, onClose }: { product: Product; onClose: () => void }) {
         <p className="text-xs text-muted-foreground">Stock below this number triggers warnings across the workspace.</p>
       </div>
 
-      <DialogFooter className="border-t pt-4">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Close
+      <DialogFooter className="border-t pt-4 sm:justify-between">
+        <Button type="button" variant="ghost" className="text-danger hover:bg-danger-soft hover:text-danger" onClick={onDelete}>
+          <Trash2 /> Delete
         </Button>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row">
+          <Button type="button" variant="outline" onClick={onEdit}>
+            <Pencil /> Edit details
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </div>
       </DialogFooter>
     </div>
   );
@@ -165,9 +175,17 @@ function Body({ product, onClose }: { product: Product; onClose: () => void }) {
 
 export function ProductDialog({ productId, onClose }: { productId: string | null; onClose: () => void }) {
   const lookups = useDemoLookups();
+  const actions = useDemoActions();
+  const toast = useToast();
+  // Tied to the record, so a pending edit or confirmation can't carry over to the next one opened.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const product = productId ? lookups.products.get(productId) : undefined;
+  const editing = !!product && editingId === product.id;
+  const confirmDelete = !!product && deletingId === product.id;
   return (
-    <Dialog open={!!product} onOpenChange={(o) => !o && onClose()}>
+    <>
+    <Dialog open={!!product && !editing && !confirmDelete} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         {product && (
           <>
@@ -175,10 +193,26 @@ export function ProductDialog({ productId, onClose }: { productId: string | null
               <DialogTitle>{product.name}</DialogTitle>
               <DialogDescription className="font-mono text-xs">{product.sku}</DialogDescription>
             </DialogHeader>
-            <Body key={`${product.id}-${product.stock}-${product.threshold}`} product={product} onClose={onClose} />
+            <Body key={`${product.id}-${product.stock}-${product.threshold}`} product={product} onClose={onClose} onEdit={() => setEditingId(product.id)} onDelete={() => setDeletingId(product.id)} />
           </>
         )}
       </DialogContent>
     </Dialog>
+    <AddProductDialog open={editing} onOpenChange={(o) => !o && setEditingId(null)} product={product} />
+    <ConfirmDialog
+      open={confirmDelete}
+      title={`Delete ${product?.name ?? "this product"}?`}
+      description="This permanently removes the product. It can't be undone. Products on an order or quotation have to stay, so delete those first."
+      confirmLabel="Delete product"
+      onCancel={() => setDeletingId(null)}
+      onConfirm={() => {
+        setDeletingId(null);
+        if (!product) return;
+        const r = actions.deleteProduct(product.id);
+        if (r.ok) toast.info("Product deleted", `${product.name} was removed.`);
+        else toast.error("Could not delete the product", r.error);
+      }}
+    />
+    </>
   );
 }

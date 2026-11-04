@@ -1,9 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
-import { ExternalLink, KeyRound, LogOut, Monitor, Moon, RotateCcw, Settings, ShieldCheck, Sun } from "lucide-react";
+import { ExternalLink, Globe, Inbox, KeyRound, LogOut, Monitor, Moon, RotateCcw, Settings, ShieldCheck, Sun } from "lucide-react";
 
 import { Link, useDemoRouter } from "@/components/demo/link";
+import { useSignOut } from "@/components/workspace/sign-out";
 import { Avatar } from "@/components/shared/badges";
 import { useToast } from "@/components/demo/toast";
 import {
@@ -16,7 +16,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { signOut } from "@/lib/auth/actions";
 import { useSettings, useSettingsActions } from "@/lib/demo/settings";
 import { useDemoActions, useDemoData } from "@/lib/demo/store";
 import type { TeamMember, ThemePreference } from "@/lib/demo/types";
@@ -32,7 +31,7 @@ export function ProfileMenu() {
   const actions = useDemoActions();
   const toast = useToast();
   const { mode, selfId, profile } = useWorkspaceEnv();
-  const [signingOut, startSignOut] = useTransition();
+  const { signOut, pending: signingOut } = useSignOut();
   const me = data.team.find((t) => t.id === selfId) ?? data.team[0] ?? FALLBACK_ME;
   const demo = mode === "demo";
 
@@ -65,6 +64,20 @@ export function ProfileMenu() {
           <DropdownMenuItem asChild>
             <Link href="/demo/settings/users">
               <ShieldCheck /> Users &amp; access
+            </Link>
+          </DropdownMenuItem>
+        )}
+        {profile?.isAdmin && (
+          <DropdownMenuItem asChild>
+            <Link href="/demo/settings/inbox">
+              <Inbox /> Inbox
+            </Link>
+          </DropdownMenuItem>
+        )}
+        {profile?.isSuperAdmin && (
+          <DropdownMenuItem asChild>
+            <Link href="/demo/settings/website">
+              <Globe /> Edit website
             </Link>
           </DropdownMenuItem>
         )}
@@ -110,7 +123,7 @@ export function ProfileMenu() {
             </Link>
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem disabled={signingOut} onSelect={() => startSignOut(() => signOut())}>
+          <DropdownMenuItem disabled={signingOut} onSelect={signOut}>
             <LogOut /> Sign out
           </DropdownMenuItem>
         )}

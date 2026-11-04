@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Briefcase, ClipboardList, Mail, TriangleAlert, UserPlus } from "lucide-react";
+import { Briefcase, ClipboardList, Mail, Pencil, Trash2, TriangleAlert, UserPlus } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/demo/confirm-dialog";
+import { useToast } from "@/components/demo/toast";
 import { Card, DemoNotice, PageHeader } from "@/components/demo/ui";
 import { AddMemberDialog } from "@/components/demo/team/add-member-dialog";
 import { Avatar } from "@/components/shared/badges";
@@ -10,15 +12,22 @@ import { Button } from "@/components/ui/button";
 import { monthKey } from "@/lib/demo/dates";
 import { OPEN_STAGES, isTaskOverdue } from "@/lib/demo/selectors";
 import { useMoney } from "@/lib/demo/settings";
-import { useDemoData } from "@/lib/demo/store";
-import { useIsDemo, useToday } from "@/lib/workspace/context";
+import { useDemoActions, useDemoData } from "@/lib/demo/store";
+import { useIsDemo, useToday, useWorkspaceEnv } from "@/lib/workspace/context";
 
 export function TeamView() {
   const data = useDemoData();
   const money = useMoney();
   const today = useToday();
   const demo = useIsDemo();
+  const { selfId } = useWorkspaceEnv();
+  const actions = useDemoActions();
+  const toast = useToast();
   const [addOpen, setAddOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const editing = data.team.find((t) => t.id === editingId);
+  const deleting = data.team.find((t) => t.id === deletingId);
 
   const stats = useMemo(
     () =>
@@ -48,14 +57,12 @@ export function TeamView() {
     <>
       <PageHeader title="Team" description={`Who owns what: accounts, deals, projects and tasks, calculated from ${demo ? "the sample" : "your"} records.`}
         actions={
-          !demo && (
-            <Button onClick={() => setAddOpen(true)}>
-              <UserPlus /> Add team member
-            </Button>
-          )
+          <Button onClick={() => setAddOpen(true)}>
+            <UserPlus /> Add team member
+          </Button>
         }
       />
-      {demo && <DemoNotice className="mb-6">Roles and permissions are not implemented in this proof of concept. This is a read-only overview of ownership and workload.</DemoNotice>}
+      {demo && <DemoNotice className="mb-6">Changes here last until you refresh the page. In a real workspace, team members are the people you track work against; sign-ins are created separately by an administrator.</DemoNotice>}
 
       <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {stats.map((s) => (
@@ -68,10 +75,16 @@ export function TeamView() {
                   <p className="truncate text-sm text-muted-foreground">{s.member.role}</p>
                 </div>
               </header>
-              <a href={`mailto:${s.member.email}`} className="mt-3 flex items-center gap-1.5 truncate text-xs text-muted-foreground hover:text-foreground">
-                <Mail className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{s.member.email}</span>
-              </a>
+              {s.member.email ? (
+                <a href={`mailto:${s.member.email}`} className="mt-3 flex items-center gap-1.5 truncate text-xs text-muted-foreground hover:text-foreground">
+                  <Mail className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{s.member.email}</span>
+                </a>
+              ) : (
+                <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                  <Mail className="size-3.5 shrink-0" aria-hidden="true" /> No email added
+                </p>
+              )}
 
               <dl className="mt-5 grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl bg-muted/60 px-2 py-2.5">
@@ -115,6 +128,18 @@ export function TeamView() {
                 <Briefcase className="size-3.5" aria-hidden="true" />
                 {s.deals > 0 ? `${money.compact(s.dealValue)} open pipeline` : "No open pipeline"} · {s.orders} order{s.orders === 1 ? "" : "s"} this month ({money.compact(s.orderValue)})
               </p>
+              {s.member.id === selfId ? (
+                <p className="mt-3 text-xs text-muted-foreground">{demo ? "This is you in the demo." : "This is you. Change your name under Settings → Account."}</p>
+              ) : (
+                <div className="mt-3 flex justify-end gap-1">
+                  <Button variant="ghost" size="xs" aria-label={`Edit ${s.member.name}`} onClick={() => setEditingId(s.member.id)}>
+                    <Pencil /> Edit
+                  </Button>
+                  <Button variant="ghost" size="xs" className="text-danger hover:bg-danger-soft hover:text-danger" aria-label={`Remove ${s.member.name}`} onClick={() => setDeletingId(s.member.id)}>
+                    <Trash2 /> Remove
+                  </Button>
+                </div>
+              )}
             </article>
           </li>
         ))}
@@ -137,7 +162,23 @@ export function TeamView() {
         </ul>
       </Card>
 
-      {!demo && <AddMemberDialog open={addOpen} onOpenChange={setAddOpen} />}
+      <AddMemberDialog open={addOpen} onOpenChange={setAddOpen} />
+      <AddMemberDialog open={!!editing} onOpenChange={(o) => !o && setEditingId(null)} member={editing} />
+      <ConfirmDialog
+        open={!!deleting}
+        title={`Remove ${deleting?.name ?? "this person"}?`}
+        description="They come off the team, and anything they own (contacts, projects and tasks) passes to you. It can't be undone."
+        confirmLabel="Remove from team"
+        onCancel={() => setDeletingId(null)}
+        onConfirm={() => {
+          if (deleting) {
+            const r = actions.deleteTeamMember(deleting.id);
+            if (r.ok) toast.info("Team member removed", `${deleting.name}'s work has passed to you.`);
+            else toast.error("Could not remove them", r.error);
+          }
+          setDeletingId(null);
+        }}
+      />
     </>
   );
 }

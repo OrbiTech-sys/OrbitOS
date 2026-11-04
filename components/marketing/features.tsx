@@ -5,25 +5,20 @@ import { Reveal } from "@/components/marketing/reveal";
 import { Section, SectionHeading } from "@/components/marketing/section";
 import { Icon } from "@/components/shared/icon";
 import { StatusBadge } from "@/components/shared/badges";
-import { MODULES, type Availability } from "@/lib/content/modules";
+import type { HomeContent, ModuleContent } from "@/lib/content/schema";
 
-const AVAILABILITY_TONE: Record<Availability, "success" | "info" | "neutral"> = {
-  "Interactive demo": "success",
-  "Concept preview": "info",
+const AVAILABILITY_TONE: Record<ModuleContent["availability"], "success" | "info" | "neutral"> = {
+  Available: "success",
+  Preview: "info",
   Planned: "neutral",
 };
 
-export function Features() {
+export function Features({ section, modules }: { section: HomeContent["modules"]; modules: ModuleContent[] }) {
   return (
     <Section id="modules" labelledBy="modules-title">
-      <SectionHeading
-        id="modules-title"
-        eyebrow="Modules"
-        title="Start with what you need. Expand when you're ready."
-        description="Ten building blocks that share one set of records. A small agency can begin with CRM, projects and invoicing; a retailer with sales and inventory."
-      />
+      <SectionHeading id="modules-title" eyebrow={section.eyebrow} title={section.title} description={section.description} />
       <ul className="mt-14 grid gap-5 md:grid-cols-2">
-        {MODULES.map((m, i) => (
+        {modules.map((m, i) => (
           <li key={m.slug}>
             <Reveal delay={(i % 2) * 0.06} className="h-full">
               <article className="group/card flex h-full flex-col rounded-2xl border bg-card p-6 shadow-card transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-elevated">

@@ -7,22 +7,33 @@ import { PageHero } from "@/components/marketing/page-hero";
 import { Section } from "@/components/marketing/section";
 import { Icon } from "@/components/shared/icon";
 import { Button } from "@/components/ui/button";
-import { MODULE_BY_SLUG } from "@/lib/content/modules";
-import { SOLUTIONS, SOLUTION_BY_SLUG } from "@/lib/content/site";
+import { DEFAULT_CONTENT } from "@/lib/content/defaults";
+import { bySlug } from "@/lib/content/published";
+import { getSiteContent } from "@/lib/content/store";
 
-export function generateStaticParams() {
-  return SOLUTIONS.map((s) => ({ slug: s.slug }));
+// New pages can be added in the Website editor after a build, so an address that wasn't
+// prerendered is rendered on request. It may block for that first visit, which also lets
+// an unknown address return a real 404.
+export const instant = false;
+
+/** Always includes the built-in slugs, so a build never ends up with nothing to prerender. */
+export async function generateStaticParams() {
+  const { solutions } = await getSiteContent();
+  const slugs = new Set([...solutions, ...DEFAULT_CONTENT.solutions].map((s) => s.slug));
+  return [...slugs].map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/solutions/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const s = SOLUTION_BY_SLUG[slug];
+  const { solutions } = await getSiteContent();
+  const s = bySlug(solutions, slug);
   return s ? { title: s.name, description: s.description } : {};
 }
 
 export default async function SolutionPage({ params }: PageProps<"/solutions/[slug]">) {
   const { slug } = await params;
-  const s = SOLUTION_BY_SLUG[slug];
+  const { solutions, modules } = await getSiteContent();
+  const s = bySlug(solutions, slug);
   if (!s) notFound();
 
   return (
@@ -35,7 +46,7 @@ export default async function SolutionPage({ params }: PageProps<"/solutions/[sl
             </Link>
           </Button>
           <Button asChild variant="outline" size="lg">
-            <Link href="/waitlist">Join the waitlist</Link>
+            <Link href="/waitlist">Request access</Link>
           </Button>
         </div>
       </PageHero>
@@ -58,7 +69,8 @@ export default async function SolutionPage({ params }: PageProps<"/solutions/[sl
             <h2 className="text-2xl font-semibold tracking-tight">Modules involved</h2>
             <ul className="mt-5 grid gap-3 sm:grid-cols-2">
               {s.modules.map((slug) => {
-                const m = MODULE_BY_SLUG[slug];
+                const m = bySlug(modules, slug);
+                if (!m) return null;
                 return (
                   <li key={slug}>
                     <Link
@@ -79,9 +91,6 @@ export default async function SolutionPage({ params }: PageProps<"/solutions/[sl
             </ul>
           </div>
         </div>
-        <p className="mt-12 max-w-2xl text-sm text-muted-foreground">
-          This page describes the intended direction for OrbitOS. The linked demo shows what exists in the proof of concept; nothing here is a commercial service yet.
-        </p>
       </Section>
     </>
   );

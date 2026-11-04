@@ -5,26 +5,27 @@ import { ArrowRight } from "lucide-react";
 import { PageHero } from "@/components/marketing/page-hero";
 import { Section } from "@/components/marketing/section";
 import { Icon } from "@/components/shared/icon";
-import { INDUSTRIES } from "@/lib/content/industries";
-import { MODULE_BY_SLUG } from "@/lib/content/modules";
+import { bySlug } from "@/lib/content/published";
+import { getSiteContent } from "@/lib/content/store";
 
-export const metadata: Metadata = {
-  title: "Industries",
-  description: "How OrbitOS modules combine for retail, services, agencies, manufacturing, wholesale and technology businesses.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { home } = await getSiteContent();
+  return { title: "Industries", description: home.industries.description };
+}
 
-export default function IndustriesPage() {
+export default async function IndustriesPage() {
+  const { home, industries, modules } = await getSiteContent();
   return (
     <>
       <PageHero
         eyebrow="Industries"
-        title="One core, shaped around how you work"
-        description="Each industry starts from the same connected records and a different mix of modules. Deeper, industry-specific processes will be added progressively."
+        title={home.industries.title}
+        description={home.industries.description}
         crumbs={[{ label: "Industries" }]}
       />
       <Section className="py-16 sm:py-20">
         <ul className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {INDUSTRIES.map((i) => (
+          {industries.map((i) => (
             <li key={i.slug}>
               <Link
                 href={`/industries/${i.slug}`}
@@ -38,7 +39,7 @@ export default function IndustriesPage() {
                 <ul className="mt-4 flex flex-wrap gap-1.5">
                   {i.modules.slice(0, 4).map((slug) => (
                     <li key={slug} className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                      {MODULE_BY_SLUG[slug].name}
+                      {bySlug(modules, slug)?.name}
                     </li>
                   ))}
                 </ul>

@@ -122,19 +122,25 @@ export function OrdersView() {
           empty={
             <EmptyState
               icon={<PackageSearch />}
-              title="No orders match your filters"
-              description="Try a different status or search term, or create a new order."
+              title={data.orders.length ? "No orders match your filters" : "No orders yet"}
+              description={data.orders.length ? "Try a different status or search term, or create a new order." : "Orders you create appear here, and reserve stock as they do."}
               action={
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setQuery("");
-                    setStatus("all");
-                    setRange("all");
-                  }}
-                >
-                  Clear filters
-                </Button>
+                data.orders.length ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setQuery("");
+                      setStatus("all");
+                      setRange("all");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : (
+                  <Button onClick={() => setCreateOpen(true)}>
+                    <Plus /> Create order
+                  </Button>
+                )
               }
             />
           }

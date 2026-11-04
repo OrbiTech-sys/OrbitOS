@@ -4,8 +4,9 @@ import { Link } from "@/components/demo/link";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { BadgeCheck, CalendarClock, FileSearch, Landmark, Plus, ReceiptText, TriangleAlert, Wallet } from "lucide-react";
+import { BadgeCheck, CalendarClock, FileSearch, Landmark, Pencil, Plus, ReceiptText, RotateCcw, Trash2, TriangleAlert, Wallet } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/demo/confirm-dialog";
 import { useToast } from "@/components/demo/toast";
 import { Card, DataTable, DemoNotice, DetailList, EmptyState, FilterChips, PageHeader, SearchField, SelectField, StatCard, type Column } from "@/components/demo/ui";
 import { Field, describedBy } from "@/components/shared/form-field";
@@ -43,6 +44,12 @@ export function FinanceView() {
   const [expQuery, setExpQuery] = useState("");
   const [expCategory, setExpCategory] = useState("all");
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
+  const editingExpense = data.expenses.find((e) => e.id === editingExpenseId);
+  const deletingExpense = data.expenses.find((e) => e.id === deletingExpenseId);
+  const deletingInvoice = deletingInvoiceId ? lookups.invoices.get(deletingInvoiceId) : undefined;
 
   const m = useMemo(() => computeMetrics(data, today), [data, today]);
   const aging = useMemo(() => invoiceAging(data, today), [data, today]);
@@ -128,6 +135,21 @@ export function FinanceView() {
     { key: "description", header: "Description", hideBelow: "md", cell: (e) => <span className="text-muted-foreground">{e.description}</span> },
     { key: "category", header: "Category", hideBelow: "sm", sortValue: (e) => e.category, cell: (e) => <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium">{e.category}</span> },
     { key: "amount", header: "Amount", align: "right", sortValue: (e) => e.amount, cell: (e) => <span className="font-semibold">{money.full(e.amount)}</span> },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (e) => (
+        <div className="flex justify-end gap-1">
+          <Button variant="ghost" size="icon-sm" aria-label={`Edit expense from ${e.vendor}`} onClick={() => setEditingExpenseId(e.id)}>
+            <Pencil />
+          </Button>
+          <Button variant="ghost" size="icon-sm" className="text-danger hover:bg-danger-soft hover:text-danger" aria-label={`Delete expense from ${e.vendor}`} onClick={() => setDeletingExpenseId(e.id)}>
+            <Trash2 />
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   const openInvoice = openId ? lookups.invoices.get(openId) : undefined;
@@ -234,7 +256,7 @@ export function FinanceView() {
               onRowClick={(i) => actions.open("invoice", i.id)}
               selectedKey={openId}
               initialSort={{ key: "due", dir: "asc" }}
-              empty={<EmptyState icon={<FileSearch />} title="No invoices match" description="Try a different status or search term." />}
+              empty={<EmptyState icon={<FileSearch />} title={data.invoices.length ? "No invoices match" : "No invoices yet"} description={data.invoices.length ? "Try a different status or search term." : "Invoices are issued from orders, and appear here."} />}
             />
           </TabsContent>
 
@@ -253,14 +275,14 @@ export function FinanceView() {
               rows={expenseRows}
               rowKey={(e) => e.id}
               initialSort={{ key: "date", dir: "desc" }}
-              empty={<EmptyState icon={<FileSearch />} title="No expenses match" description="Try a different category or search term." />}
+              empty={<EmptyState icon={<FileSearch />} title={data.expenses.length ? "No expenses match" : "No expenses yet"} description={data.expenses.length ? "Try a different category or search term." : "Add an expense and it shows here and in the trend chart."} />}
             />
           </TabsContent>
         </Tabs>
       </Card>
 
       {/* Invoice detail */}
-      <Dialog open={!!openInvoice} onOpenChange={(o) => !o && actions.closeRecord()}>
+      <Dialog open={!!openInvoice && !deletingInvoice} onOpenChange={(o) => !o && actions.closeRecord()}>
         <DialogContent className="sm:max-w-md">
           {openInvoice && (
             <>
@@ -288,15 +310,24 @@ export function FinanceView() {
                   },
                 ]}
               />
-              <DialogFooter>
-                <Button variant="outline" onClick={actions.closeRecord}>
-                  Close
+              <DialogFooter className="sm:justify-between">
+                <Button variant="ghost" className="text-danger hover:bg-danger-soft hover:text-danger" onClick={() => setDeletingInvoiceId(openInvoice.id)}>
+                  <Trash2 /> Delete
                 </Button>
-                {openInvoice.status === "unpaid" && (
-                  <Button onClick={() => { pay(openInvoice); actions.closeRecord(); }}>
-                    <BadgeCheck /> Mark as paid
+                <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                  <Button variant="outline" onClick={actions.closeRecord}>
+                    Close
                   </Button>
-                )}
+                  {openInvoice.status === "unpaid" ? (
+                    <Button onClick={() => { pay(openInvoice); actions.closeRecord(); }}>
+                      <BadgeCheck /> Mark as paid
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={() => { actions.markInvoiceUnpaid(openInvoice.id); toast.info(`${openInvoice.number} marked as unpaid`); }}>
+                      <RotateCcw /> Mark as unpaid
+                    </Button>
+                  )}
+                </div>
               </DialogFooter>
             </>
           )}
@@ -304,13 +335,44 @@ export function FinanceView() {
       </Dialog>
 
       <AddExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} />
+      <AddExpenseDialog open={!!editingExpense} onOpenChange={(o) => !o && setEditingExpenseId(null)} expense={editingExpense} />
+      <ConfirmDialog
+        open={!!deletingExpense}
+        title="Delete this expense?"
+        description={`${deletingExpense?.vendor ?? ""} · ${deletingExpense ? money.full(deletingExpense.amount) : ""} will be permanently removed. It can't be undone.`}
+        confirmLabel="Delete expense"
+        onCancel={() => setDeletingExpenseId(null)}
+        onConfirm={() => {
+          if (deletingExpense) {
+            const r = actions.deleteExpense(deletingExpense.id);
+            if (r.ok) toast.info("Expense deleted", `${deletingExpense.vendor} was removed.`);
+            else toast.error("Could not delete the expense", r.error);
+          }
+          setDeletingExpenseId(null);
+        }}
+      />
+      <ConfirmDialog
+        open={!!deletingInvoice}
+        title={`Delete ${deletingInvoice?.number ?? "this invoice"}?`}
+        description="This permanently removes the invoice. Its order stays, without an invoice. It can't be undone."
+        confirmLabel="Delete invoice"
+        onCancel={() => setDeletingInvoiceId(null)}
+        onConfirm={() => {
+          if (deletingInvoice) {
+            const r = actions.deleteInvoice(deletingInvoice.id);
+            if (r.ok) toast.info(`${deletingInvoice.number} deleted`);
+            else toast.error("Could not delete the invoice", r.error);
+          }
+          setDeletingInvoiceId(null);
+        }}
+      />
     </>
   );
 }
 
 /* ----------------------------------------------------------- Add expense -- */
 
-function ExpenseForm({ onDone }: { onDone: () => void }) {
+function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone: () => void }) {
   const today = useToday();
   const actions = useDemoActions();
   const toast = useToast();
@@ -321,12 +383,21 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
     formState: { errors, submitCount },
   } = useForm<ExpenseFormInput, unknown, ExpenseFormOutput>({
     resolver: zodResolver(expenseSchema),
-    defaultValues: { date: today, category: "Software", vendor: "", description: "", amount: "" },
+    defaultValues: expense
+      ? { date: expense.date, category: expense.category, vendor: expense.vendor, description: expense.description, amount: String(expense.amount) }
+      : { date: today, category: "Software", vendor: "", description: "", amount: "" },
     mode: "onTouched",
   });
   const errorCount = Object.keys(errors).length;
 
   function onSubmit(values: ExpenseFormOutput) {
+    if (expense) {
+      const updated = actions.updateExpense(expense.id, values);
+      if (updated.ok) toast.success("Expense updated", `${updated.value.vendor} · ${money.full(updated.value.amount)}`);
+      else toast.error("Could not save the expense", updated.error);
+      onDone();
+      return;
+    }
     const r = actions.addExpense(values);
     if (!r.ok) {
       toast.error("Could not add expense", r.error);
@@ -370,22 +441,22 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
         <Button type="button" variant="outline" onClick={onDone}>
           Cancel
         </Button>
-        <Button type="submit">Add expense</Button>
+        <Button type="submit">{expense ? "Save changes" : "Add expense"}</Button>
       </DialogFooter>
     </form>
   );
 }
 
-function AddExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function AddExpenseDialog({ open, onOpenChange, expense }: { open: boolean; onOpenChange: (open: boolean) => void; expense?: Expense }) {
   const demo = useIsDemo();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add expense</DialogTitle>
+          <DialogTitle>{expense ? "Edit expense" : "Add expense"}</DialogTitle>
           <DialogDescription>{demo ? "Recorded locally in this demo. " : ""}It appears in the expense list and the trend chart.</DialogDescription>
         </DialogHeader>
-        {open && <ExpenseForm onDone={() => onOpenChange(false)} />}
+        {open && <ExpenseForm key={expense?.id ?? "new"} expense={expense} onDone={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
   );

@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ClipboardCheck, FolderPlus, ListTodo, Plus, TriangleAlert } from "lucide-react";
+import { Check, ClipboardCheck, FolderPlus, ListTodo, Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/demo/confirm-dialog";
 import { AddProjectDialog } from "@/components/demo/projects/add-project-dialog";
 import { AddTaskDialog } from "@/components/demo/projects/add-task-dialog";
 import { useToast } from "@/components/demo/toast";
@@ -36,6 +37,10 @@ export function ProjectsView() {
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
 
   const m = useMemo(() => computeMetrics(data, today), [data, today]);
   const openCount = data.tasks.filter((t) => t.status !== "done").length;
@@ -167,6 +172,11 @@ export function ProjectsView() {
   ];
 
   const openTask = openId ? lookups.tasks.get(openId) : undefined;
+  const editingTask = editingTaskId ? lookups.tasks.get(editingTaskId) : undefined;
+  const deletingTask = deletingTaskId ? lookups.tasks.get(deletingTaskId) : undefined;
+  const editingProject = editingProjectId ? lookups.projects.get(editingProjectId) : undefined;
+  const deletingProject = deletingProjectId ? lookups.projects.get(deletingProjectId) : undefined;
+  const deletingProjectTasks = deletingProject ? data.tasks.filter((t) => t.projectId === deletingProject.id).length : 0;
 
   return (
     <>
@@ -198,7 +208,7 @@ export function ProjectsView() {
           {projectStats.map(({ project: p, total, done }) => {
             const active = project === p.id;
             return (
-              <li key={p.id}>
+              <li key={p.id} className="group relative">
                 <button
                   type="button"
                   aria-pressed={active}
@@ -223,6 +233,14 @@ export function ProjectsView() {
                     <span className="block h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
                   </span>
                 </button>
+                <span className="mt-1 flex justify-end gap-1">
+                  <Button variant="ghost" size="xs" aria-label={`Edit ${p.name}`} onClick={() => setEditingProjectId(p.id)}>
+                    <Pencil /> Edit
+                  </Button>
+                  <Button variant="ghost" size="xs" className="text-danger hover:bg-danger-soft hover:text-danger" aria-label={`Delete ${p.name}`} onClick={() => setDeletingProjectId(p.id)}>
+                    <Trash2 /> Delete
+                  </Button>
+                </span>
               </li>
             );
           })}
@@ -271,23 +289,25 @@ export function ProjectsView() {
           empty={
             <EmptyState
               icon={<ClipboardCheck />}
-              title="No tasks match your filters"
-              description="Change a filter, or add a new task."
+              title={data.tasks.length ? "No tasks match your filters" : "No tasks yet"}
+              description={data.tasks.length ? "Change a filter, or add a new task." : "Create a project, then add the work that goes in it."}
               action={
                 <div className="flex flex-wrap justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setQuery("");
-                      setStatus("all");
-                      setProject("all");
-                      setAssignee("all");
-                      setPriority("all");
-                      setOverdueOnly(false);
-                    }}
-                  >
-                    Clear filters
-                  </Button>
+                  {data.tasks.length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setQuery("");
+                        setStatus("all");
+                        setProject("all");
+                        setAssignee("all");
+                        setPriority("all");
+                        setOverdueOnly(false);
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  )}
                   <Button onClick={() => setAddOpen(true)}>
                     <Plus /> Add task
                   </Button>
@@ -298,7 +318,7 @@ export function ProjectsView() {
         />
       </Card>
 
-      <Dialog open={!!openTask} onOpenChange={(o) => !o && actions.closeRecord()}>
+      <Dialog open={!!openTask && !editingTask && !deletingTask} onOpenChange={(o) => !o && actions.closeRecord()}>
         <DialogContent className="sm:max-w-md">
           {openTask && (
             <>
@@ -319,7 +339,13 @@ export function ProjectsView() {
                   </div>
                 ))}
               </dl>
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" className="mr-auto text-danger hover:bg-danger-soft hover:text-danger" onClick={() => setDeletingTaskId(openTask.id)}>
+                  <Trash2 /> Delete
+                </Button>
+                <Button variant="outline" onClick={() => setEditingTaskId(openTask.id)}>
+                  <Pencil /> Edit
+                </Button>
                 {openTask.status !== "done" ? (
                   <Button
                     onClick={() => {
@@ -350,6 +376,40 @@ export function ProjectsView() {
         }}
       />
       <AddProjectDialog open={projectOpen} onOpenChange={setProjectOpen} />
+      <AddTaskDialog open={!!editingTask} onOpenChange={(o) => !o && setEditingTaskId(null)} task={editingTask} />
+      <AddProjectDialog open={!!editingProject} onOpenChange={(o) => !o && setEditingProjectId(null)} project={editingProject} />
+      <ConfirmDialog
+        open={!!deletingTask}
+        title="Delete this task?"
+        description={`“${deletingTask?.title ?? ""}” will be permanently removed. It can't be undone.`}
+        confirmLabel="Delete task"
+        onCancel={() => setDeletingTaskId(null)}
+        onConfirm={() => {
+          if (deletingTask) {
+            const r = actions.deleteTask(deletingTask.id);
+            if (r.ok) toast.info("Task deleted", `“${deletingTask.title}” was removed.`);
+            else toast.error("Could not delete the task", r.error);
+          }
+          setDeletingTaskId(null);
+        }}
+      />
+      <ConfirmDialog
+        open={!!deletingProject}
+        title={`Delete ${deletingProject?.name ?? "this project"}?`}
+        description={deletingProjectTasks > 0 ? `This also deletes its ${deletingProjectTasks} task${deletingProjectTasks === 1 ? "" : "s"}. It can't be undone.` : "This permanently removes the project. It can't be undone."}
+        confirmLabel="Delete project"
+        onCancel={() => setDeletingProjectId(null)}
+        onConfirm={() => {
+          if (deletingProject) {
+            const r = actions.deleteProject(deletingProject.id);
+            if (r.ok) {
+              toast.info("Project deleted", `“${deletingProject.name}” was removed.`);
+              if (project === deletingProject.id) setProject("all");
+            } else toast.error("Could not delete the project", r.error);
+          }
+          setDeletingProjectId(null);
+        }}
+      />
     </>
   );
 }

@@ -7,21 +7,33 @@ import { IndustryDetail } from "@/components/marketing/industries-section";
 import { PageHero } from "@/components/marketing/page-hero";
 import { Section } from "@/components/marketing/section";
 import { Button } from "@/components/ui/button";
-import { INDUSTRIES, INDUSTRY_BY_SLUG } from "@/lib/content/industries";
+import { DEFAULT_CONTENT } from "@/lib/content/defaults";
+import { bySlug } from "@/lib/content/published";
+import { getSiteContent } from "@/lib/content/store";
 
-export function generateStaticParams() {
-  return INDUSTRIES.map((i) => ({ slug: i.slug }));
+// New pages can be added in the Website editor after a build, so an address that wasn't
+// prerendered is rendered on request. It may block for that first visit, which also lets
+// an unknown address return a real 404.
+export const instant = false;
+
+/** Always includes the built-in slugs, so a build never ends up with nothing to prerender. */
+export async function generateStaticParams() {
+  const { industries } = await getSiteContent();
+  const slugs = new Set([...industries, ...DEFAULT_CONTENT.industries].map((i) => i.slug));
+  return [...slugs].map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/industries/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const i = INDUSTRY_BY_SLUG[slug];
+  const { industries } = await getSiteContent();
+  const i = bySlug(industries, slug);
   return i ? { title: i.name, description: i.summary } : {};
 }
 
 export default async function IndustryPage({ params }: PageProps<"/industries/[slug]">) {
   const { slug } = await params;
-  const industry = INDUSTRY_BY_SLUG[slug];
+  const { industries, modules } = await getSiteContent();
+  const industry = bySlug(industries, slug);
   if (!industry) notFound();
 
   return (
@@ -39,13 +51,13 @@ export default async function IndustryPage({ params }: PageProps<"/industries/[s
             </Link>
           </Button>
           <Button asChild variant="outline" size="lg">
-            <Link href="/waitlist">Join the waitlist</Link>
+            <Link href="/waitlist">Request access</Link>
           </Button>
         </div>
       </PageHero>
       <Section className="py-16 sm:py-20">
         <div className="max-w-4xl">
-          <IndustryDetail industry={industry} />
+          <IndustryDetail industry={industry} modules={modules} />
         </div>
       </Section>
     </>

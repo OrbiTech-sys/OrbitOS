@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { teamMemberSchema, type TeamMemberFormInput } from "@/lib/demo/schemas";
 import { useDemoActions } from "@/lib/demo/store";
+import type { TeamMember } from "@/lib/demo/types";
 
-function Form({ onDone }: { onDone: () => void }) {
+function Form({ member, onDone }: { member?: TeamMember; onDone: () => void }) {
   const actions = useDemoActions();
   const toast = useToast();
   const {
@@ -21,17 +22,18 @@ function Form({ onDone }: { onDone: () => void }) {
     formState: { errors },
   } = useForm<TeamMemberFormInput>({
     resolver: zodResolver(teamMemberSchema),
-    defaultValues: { name: "", role: "", email: "" },
+    defaultValues: member ? { name: member.name, role: member.role, email: member.email } : { name: "", role: "", email: "" },
     mode: "onTouched",
   });
 
   function onSubmit(values: TeamMemberFormInput) {
-    const r = actions.addTeamMember(values);
+    const r = member ? actions.updateTeamMember(member.id, values) : actions.addTeamMember(values);
     if (!r.ok) {
       setError("email", { message: r.error });
       return;
     }
-    toast.success("Team member added", `${r.value.name} can now own contacts, projects and tasks.`);
+    if (member) toast.success("Team member updated", `${r.value.name}'s details were saved.`);
+    else toast.success("Team member added", `${r.value.name} can now own contacts, projects and tasks.`);
     onDone();
   }
 
@@ -52,21 +54,21 @@ function Form({ onDone }: { onDone: () => void }) {
         <Button type="button" variant="outline" onClick={onDone}>
           Cancel
         </Button>
-        <Button type="submit">Add to team</Button>
+        <Button type="submit">{member ? "Save changes" : "Add to team"}</Button>
       </DialogFooter>
     </form>
   );
 }
 
-export function AddMemberDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function AddMemberDialog({ open, onOpenChange, member }: { open: boolean; onOpenChange: (open: boolean) => void; member?: TeamMember }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add team member</DialogTitle>
+          <DialogTitle>{member ? "Edit team member" : "Add team member"}</DialogTitle>
           <DialogDescription>For tracking who owns what. This doesn&apos;t create a sign-in; accounts are created by your administrator.</DialogDescription>
         </DialogHeader>
-        {open && <Form onDone={() => onOpenChange(false)} />}
+        {open && <Form key={member?.id ?? "new"} member={member} onDone={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
   );

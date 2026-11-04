@@ -136,7 +136,7 @@ export const recordSchemas = {
     kind: z.enum(["order", "invoice", "payment", "contact", "inventory", "task", "quotation", "expense", "system"]),
     message: text(500),
     actorId: id.nullable(),
-    href: text(200).nullable(),
+    href: text(200).regex(/^\/(?!\/)/).nullable(),
   }),
 } as const;
 

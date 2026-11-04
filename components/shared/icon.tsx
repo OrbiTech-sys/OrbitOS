@@ -43,11 +43,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import type { IconName } from "@/lib/content/icons";
+
+export type { IconName };
+
 /**
  * Icons are referenced by string key from content files so that server
  * components can pass them to client components as plain serialisable props.
  */
-const ICONS = {
+const ICONS: Record<IconName, LucideIcon> = {
   activity: Activity,
   alert: AlertTriangle,
   analytics: BarChart3,
@@ -89,9 +93,7 @@ const ICONS = {
   code: Code2,
   rocket: Rocket,
   target: Target,
-} satisfies Record<string, LucideIcon>;
-
-export type IconName = keyof typeof ICONS;
+};
 
 export function Icon({ name, className, ...props }: { name: IconName; className?: string } & React.ComponentProps<"svg">) {
   const Cmp = ICONS[name];

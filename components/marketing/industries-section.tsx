@@ -7,12 +7,12 @@ import { ArrowRight, Info } from "lucide-react";
 import { Section, SectionHeading } from "@/components/marketing/section";
 import { Icon } from "@/components/shared/icon";
 import { Button } from "@/components/ui/button";
-import { INDUSTRIES, type IndustryContent } from "@/lib/content/industries";
-import { MODULE_BY_SLUG } from "@/lib/content/modules";
+import { bySlug } from "@/lib/content/published";
+import type { HomeContent, IndustryContent, ModuleContent } from "@/lib/content/schema";
 import { cn } from "@/lib/utils";
 
 /** Reusable detail view, also used on /industries/[slug]. */
-export function IndustryDetail({ industry, compact = false }: { industry: IndustryContent; compact?: boolean }) {
+export function IndustryDetail({ industry, modules, compact = false }: { industry: IndustryContent; modules: ModuleContent[]; compact?: boolean }) {
   return (
     <div className="space-y-6">
       <div>
@@ -36,7 +36,8 @@ export function IndustryDetail({ industry, compact = false }: { industry: Indust
         <h4 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Recommended modules</h4>
         <ul className="mt-3 flex flex-wrap gap-2">
           {industry.modules.map((slug) => {
-            const m = MODULE_BY_SLUG[slug];
+            const m = bySlug(modules, slug);
+            if (!m) return null;
             return (
               <li key={slug}>
                 <Link
@@ -53,7 +54,7 @@ export function IndustryDetail({ industry, compact = false }: { industry: Indust
       </div>
 
       <div>
-        <h4 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">An illustrative flow</h4>
+        <h4 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">A typical flow</h4>
         <ol className="mt-3 flex flex-wrap items-center gap-2">
           {industry.workflow.map((w, i) => (
             <li key={w} className="flex items-center gap-2">
@@ -64,35 +65,32 @@ export function IndustryDetail({ industry, compact = false }: { industry: Indust
         </ol>
       </div>
 
-      <p className="flex items-start gap-2 rounded-xl border border-dashed bg-muted/60 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
-        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-        <span>
-          <strong className="font-semibold text-foreground">Honest status:</strong> {industry.note}
-        </span>
-      </p>
+      {industry.note && (
+        <p className="flex items-start gap-2 rounded-xl border border-dashed bg-muted/60 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            <strong className="font-semibold text-foreground">Good to know:</strong> {industry.note}
+          </span>
+        </p>
+      )}
     </div>
   );
 }
 
-export function IndustriesSection() {
-  const [selected, setSelected] = useState(INDUSTRIES[0].slug);
-  const industry = INDUSTRIES.find((i) => i.slug === selected) ?? INDUSTRIES[0];
+export function IndustriesSection({ section, industries, modules }: { section: HomeContent["industries"]; industries: IndustryContent[]; modules: ModuleContent[] }) {
+  const [selected, setSelected] = useState(industries[0].slug);
+  const industry = industries.find((i) => i.slug === selected) ?? industries[0];
 
   return (
     <Section id="industries" labelledBy="industries-title" tone="muted">
-      <SectionHeading
-        id="industries-title"
-        eyebrow="Industry solutions"
-        title="The same core, shaped around how you work"
-        description="Pick an industry to see typical use cases and which modules fit. Deep, industry-specific processes will arrive progressively, and this page says plainly where they are not built yet."
-      />
+      <SectionHeading id="industries-title" eyebrow={section.eyebrow} title={section.title} description={section.description} />
       <div className="mt-12 grid gap-6 lg:grid-cols-[17rem_1fr]">
         <div
           role="radiogroup"
           aria-label="Choose an industry"
           className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 lg:flex-col lg:overflow-visible [scrollbar-width:none]"
         >
-          {INDUSTRIES.map((i) => {
+          {industries.map((i) => {
             const active = i.slug === selected;
             return (
               <button
@@ -102,13 +100,13 @@ export function IndustriesSection() {
                 aria-checked={active}
                 onClick={() => setSelected(i.slug)}
                 onKeyDown={(e) => {
-                  const idx = INDUSTRIES.findIndex((x) => x.slug === selected);
+                  const idx = industries.findIndex((x) => x.slug === selected);
                   if (e.key === "ArrowDown" || e.key === "ArrowRight") {
                     e.preventDefault();
-                    setSelected(INDUSTRIES[(idx + 1) % INDUSTRIES.length].slug);
+                    setSelected(industries[(idx + 1) % industries.length].slug);
                   } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
                     e.preventDefault();
-                    setSelected(INDUSTRIES[(idx - 1 + INDUSTRIES.length) % INDUSTRIES.length].slug);
+                    setSelected(industries[(idx - 1 + industries.length) % industries.length].slug);
                   }
                 }}
                 tabIndex={active ? 0 : -1}
@@ -127,7 +125,7 @@ export function IndustriesSection() {
         </div>
 
         <div className="rounded-2xl border bg-card p-6 shadow-card sm:p-8" aria-live="polite">
-          <IndustryDetail key={industry.slug} industry={industry} compact />
+          <IndustryDetail key={industry.slug} industry={industry} modules={modules} compact />
           <div className="mt-6 flex flex-wrap gap-3 border-t pt-6">
             <Button asChild variant="navy">
               <Link href={`/industries/${industry.slug}`}>

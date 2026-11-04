@@ -44,9 +44,44 @@ type AuditLogRow = {
   created_at: string;
 };
 
+type SiteContentRow = {
+  key: string;
+  data: unknown;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+type SiteSubmissionRow = {
+  id: string;
+  kind: "contact" | "waitlist";
+  name: string;
+  email: string;
+  company: string;
+  topic: string;
+  message: string;
+  team_size: string;
+  ip_hash: string | null;
+  status: "new" | "handled";
+  handled_at: string | null;
+  handled_by: string | null;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
+      site_content: {
+        Row: SiteContentRow;
+        Insert: Pick<SiteContentRow, "key" | "data"> & Partial<SiteContentRow>;
+        Update: Partial<SiteContentRow>;
+        Relationships: [];
+      };
+      site_submissions: {
+        Row: SiteSubmissionRow;
+        Insert: Pick<SiteSubmissionRow, "kind" | "name" | "email"> & Partial<SiteSubmissionRow>;
+        Update: Partial<SiteSubmissionRow>;
+        Relationships: [];
+      };
       profiles: {
         Row: ProfileRow;
         Insert: Pick<ProfileRow, "id" | "email"> & Partial<ProfileRow>;

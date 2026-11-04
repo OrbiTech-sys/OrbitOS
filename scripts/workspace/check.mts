@@ -113,6 +113,30 @@ function runSession(a: DemoActions) {
   a.markNotificationsRead(["overdue-1", "low-stock-2"]);
   // Enough activity to push the oldest entries out of the log (those are deleted from the database).
   for (let i = 0; i < 25; i++) must(a.adjustStock(widget.id, 1, `restock ${i}`));
+
+  // Editing and deleting, through the same actions the screens use.
+  const extra = must(a.addContact({ name: "Temp Lead", company: "Temp Co", email: "temp@example.com", phone: "", jobTitle: "", stage: "new", dealValue: 0, followUpDate: null, ownerId: SELF_ID, source: "", notes: "" }));
+  a.updateContact(extra.id, { name: "Renamed Lead", company: "New Co", phone: "+1 555 0199", stage: "qualified", dealValue: 500 });
+  must(a.deleteContact(extra.id));
+  must(a.updateProduct(gadget.id, { name: "Gadget Pro", unitPrice: 130, supplier: "Globex" }));
+  const spare = must(a.addProduct({ name: "Spare", sku: "SPR-1", category: "Accessories", stock: 1, threshold: 0, unitPrice: 5, unitCost: 1, supplier: "" }));
+  must(a.deleteProduct(spare.id));
+  const pat = must(a.addTeamMember({ name: "Pat Doe", role: "Ops", email: "pat@example.com" }));
+  must(a.updateTeamMember(pat.id, { name: "Pat Roe", role: "Head of Ops" }));
+  const scratch = must(a.addProject({ name: "Scratch", customerId: null, status: "planning" }));
+  const scratchTask = must(a.addTask({ title: "Throwaway", projectId: scratch.id, assigneeId: pat.id, priority: "low", dueDate: "2026-11-09" }));
+  must(a.updateTask(scratchTask.id, { title: "Renamed task", priority: "high" }));
+  must(a.updateProject(scratch.id, { name: "Scratch 2", status: "active" }));
+  must(a.deleteProject(scratch.id));
+  const fee = must(a.addExpense({ date: "2026-10-27", category: "Software", vendor: "Old Vendor", description: "", amount: 10 }));
+  must(a.updateExpense(fee.id, { vendor: "New Vendor", amount: 12 }));
+  must(a.deleteExpense(fee.id));
+  const draft = must(a.createQuotation({ customerId: lead.id, lines: [{ productId: widget.id, quantity: 1 }], validDays: 7, send: false }));
+  must(a.deleteQuotation(draft.id));
+  const pending = must(a.createOrder({ customerId: customer.id, lines: [{ productId: widget.id, quantity: 1 }], createInvoice: true }));
+  must(a.deleteInvoice(pending.invoiceId!));
+  must(a.deleteOrder(pending.id));
+  must(a.deleteTeamMember(pat.id));
   return { lead, customer, widget, gadget, order1, order2 };
 }
 
@@ -166,6 +190,95 @@ let finalState: DemoState;
   check(invalid === 0, `All ${batches.reduce((n, b) => n + b.upserts.length, 0)} saved records pass validation`, detail.join("; "));
   check(batches.some((b) => b.deletes.length > 0) && !rows.has(`activity:${"none"}`), "Entries trimmed from the activity log are deleted from storage");
   sameWorkspace("Reloading the stored rows gives back exactly what was on screen", rowsToWorkspace([...rows.values()], self), finalState);
+}
+
+/* ------------------------------------------------------- Edit and delete -- */
+
+section("Editing and deleting");
+{
+  const { store, actions: a } = newWorkspace(() => {});
+  const refused = <T,>(r: { ok: true; value: T } | { ok: false; error: string }) => (r.ok ? "" : r.error);
+
+  const buyer = must(a.addContact({ name: "Buyer", company: "Buy Co", email: "b@example.com", phone: "", jobTitle: "", stage: "customer", dealValue: 0, followUpDate: null, ownerId: SELF_ID, source: "", notes: "" }));
+  const stocked = must(a.addProduct({ name: "Stocked", sku: "STK-1", category: "Accessories", stock: 10, threshold: 2, unitPrice: 10, unitCost: 4, supplier: "" }));
+  const other = must(a.addProduct({ name: "Other", sku: "OTH-1", category: "Accessories", stock: 5, threshold: 1, unitPrice: 3, unitCost: 1, supplier: "" }));
+  const data = () => store.getState().data;
+
+  a.updateContact(buyer.id, { name: "Buyer Two", email: "b2@example.com" });
+  check(data().contacts[0].name === "Buyer Two" && data().contacts[0].email === "b2@example.com", "A contact's details can be edited");
+
+  check(!refused(a.updateProduct(stocked.id, { name: "Stocked Pro", unitPrice: 12 })) && data().products.find((p) => p.id === stocked.id)!.unitPrice === 12, "A product's details can be edited");
+  check(!!refused(a.updateProduct(other.id, { sku: "stk-1" })), "Two products can't share a SKU, whatever the case");
+  check(data().products.find((p) => p.id === stocked.id)!.stock === 10, "Editing a product leaves its stock alone");
+
+  const order = must(a.createOrder({ customerId: buyer.id, lines: [{ productId: stocked.id, quantity: 4 }], createInvoice: true }));
+  check(data().products.find((p) => p.id === stocked.id)!.stock === 6, "An order reserves stock");
+  check(/has 1 order/.test(refused(a.deleteContact(buyer.id))), "A contact with orders can't be deleted", refused(a.deleteContact(buyer.id)));
+  check(/on 1 order/.test(refused(a.deleteProduct(stocked.id))), "A product on an order can't be deleted");
+  check(/has an invoice/.test(refused(a.deleteOrder(order.id))), "An order with an invoice can't be deleted until the invoice is");
+
+  a.markInvoicePaid(order.invoiceId!);
+  check(data().invoices[0].status === "paid" && !!data().invoices[0].paidDate, "An invoice can be marked paid");
+  a.markInvoiceUnpaid(order.invoiceId!);
+  check(data().invoices[0].status === "unpaid" && data().invoices[0].paidDate === null, "...and back to unpaid, for when that was a mistake");
+
+  must(a.deleteInvoice(order.invoiceId!));
+  check(data().invoices.length === 0 && data().orders[0].invoiceId === null, "Deleting an invoice unlinks it from its order");
+  must(a.deleteOrder(order.id));
+  check(data().orders.length === 0 && data().products.find((p) => p.id === stocked.id)!.stock === 10, "Deleting an order returns its stock");
+
+  const quote = must(a.createQuotation({ customerId: buyer.id, lines: [{ productId: stocked.id, quantity: 1 }], validDays: 7, send: true }));
+  const fromQuote = must(a.convertQuotationToOrder(quote.id));
+  check(/became an order/.test(refused(a.deleteQuotation(quote.id))), "A quotation that became an order can't be deleted");
+  must(a.deleteOrder(fromQuote.id));
+  must(a.deleteQuotation(quote.id));
+  check(data().quotations.length === 0, "...until that order is gone");
+
+  const cancelled = must(a.createOrder({ customerId: buyer.id, lines: [{ productId: other.id, quantity: 2 }] }));
+  must(a.setOrderStatus(cancelled.id, "cancelled"));
+  must(a.deleteOrder(cancelled.id));
+  check(data().products.find((p) => p.id === other.id)!.stock === 5, "Deleting a cancelled order doesn't return its stock twice");
+
+  const pat = must(a.addTeamMember({ name: "Pat Doe", role: "Ops", email: "pat@example.com" }));
+  check(!refused(a.updateTeamMember(pat.id, { name: "Pat Roe" })) && data().team.find((t) => t.id === pat.id)!.initials === "PR", "A team member can be edited, and their initials follow");
+  const dup = must(a.addTeamMember({ name: "Dup", role: "", email: "dup@example.com" }));
+  check(!!refused(a.updateTeamMember(dup.id, { email: "PAT@example.com" })), "Two team members can't share an email");
+
+  const project = must(a.addProject({ name: "Launch", customerId: buyer.id, status: "active" }));
+  const task = must(a.addTask({ title: "Plan", projectId: project.id, assigneeId: pat.id, priority: "medium", dueDate: "2026-11-02" }));
+  const owned = must(a.addContact({ name: "Owned", company: "Own Co", email: "o@example.com", phone: "", jobTitle: "", stage: "new", dealValue: 0, followUpDate: null, ownerId: pat.id, source: "", notes: "" }));
+  must(a.deleteTeamMember(pat.id));
+  check(!data().team.some((t) => t.id === pat.id), "A team member can be removed");
+  check(data().tasks.find((t) => t.id === task.id)!.assigneeId === SELF_ID && data().contacts.find((c) => c.id === owned.id)!.ownerId === SELF_ID, "...and their work passes to the owner, so nothing is orphaned");
+  check(!!refused(a.deleteTeamMember(SELF_ID)), "The workspace's owner can't be removed");
+
+  must(a.updateTask(task.id, { title: "Plan it", priority: "high" }));
+  check(data().tasks.find((t) => t.id === task.id)!.title === "Plan it", "A task can be edited");
+  check(!refused(a.updateProject(project.id, { status: "completed" })) && data().projects[0].status === "completed", "A project can be edited");
+  const clash = must(a.addProject({ name: "Other project", customerId: null, status: "active" }));
+  check(!!refused(a.updateProject(clash.id, { name: "launch" })), "Two projects can't share a name");
+
+  must(a.deleteContact(owned.id));
+  must(a.deleteContact(buyer.id));
+  check(data().projects.find((p) => p.id === project.id)!.customerId === null, "Deleting a customer leaves their project as an internal one");
+
+  must(a.deleteProject(project.id));
+  check(!data().projects.some((p) => p.id === project.id) && !data().tasks.some((t) => t.id === task.id), "Deleting a project deletes its tasks");
+
+  const expense = must(a.addExpense({ date: "2026-10-27", category: "Software", vendor: "  Acme  ", description: "", amount: 10 }));
+  check(must(a.updateExpense(expense.id, { vendor: "  Globex  ", amount: 20 })).vendor === "Globex", "An expense can be edited");
+  must(a.deleteExpense(expense.id));
+  check(data().expenses.length === 0, "An expense can be deleted");
+
+  const open = must(a.addProduct({ name: "Open", sku: "OPN-1", category: "Accessories", stock: 1, threshold: 0, unitPrice: 1, unitCost: 0, supplier: "" }));
+  a.open("product", open.id);
+  must(a.deleteProduct(open.id));
+  check(store.getState().openRecord === null, "Deleting a record closes its open drawer");
+
+  a.markNotificationsRead(["x"]);
+  const before = store.getState().readNotifications;
+  a.markNotificationsRead(["x"]);
+  check(store.getState().readNotifications === before, "Marking something read twice changes nothing, so nothing is saved again");
 }
 
 /* ----------------------------------------------------------- 3. Sync queue -- */
@@ -256,6 +369,20 @@ section("Save queue");
   q.add(upsert("d", 1));
   await sleep(80);
   check(fatal === "inactive" && attempts === 1, "A deactivated account stops saving at once and says why");
+
+  // a temporary password stops saving too, and is told apart from being signed out
+  fatal = null;
+  attempts = 0;
+  q = createSyncQueue({
+    save: async () => (attempts++, { ok: false, code: "password", error: "Choose a new password before continuing." }),
+    onState: () => {},
+    onFatal: (c) => (fatal = c),
+    debounceMs: 5,
+    retryMs: [10],
+  });
+  q.add(upsert("p", 1));
+  await sleep(80);
+  check(fatal === "password" && attempts === 1, "A temporary password stops saving without a retry loop, and isn't mistaken for signing out");
 
   // quota waits for the member
   let full = true;
@@ -365,7 +492,7 @@ if (!env("SUPABASE_URL") || !env("SUPABASE_PUBLISHABLE_KEY") || !env("SUPABASE_S
   async function makeUser(label: string) {
     const email = `ws-${label}-${randomBytes(3).toString("hex")}@theorbitechsolution.com`;
     const password = randomBytes(18).toString("base64url");
-    const made = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: {} });
+    const made = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: {}, app_metadata: { created_by_admin: true } });
     if (made.error) throw made.error;
     created.push(made.data.user.id);
     const client = createClient(url, env("SUPABASE_PUBLISHABLE_KEY")!, opts);

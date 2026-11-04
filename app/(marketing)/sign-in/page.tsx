@@ -17,7 +17,12 @@ export default function SignInPage() {
         <div className="text-center">
           <LogoMark className="mx-auto size-11" />
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">Sign in to OrbitOS</h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Accounts are created by an administrator. There is no public sign-up.</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Accounts are created by an administrator.{" "}
+            <Link href="/waitlist" className="font-medium text-foreground underline-offset-4 hover:underline">
+              Request access
+            </Link>
+          </p>
         </div>
         <Suspense fallback={null}>
           <SignedInNotice />

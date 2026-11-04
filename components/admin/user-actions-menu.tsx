@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { HardDrive, KeyRound, Loader2, MoreHorizontal, ShieldCheck, Trash2, UserCheck, UserX } from "lucide-react";
+import { HardDrive, KeyRound, Loader2, MoreHorizontal, Pencil, ShieldCheck, Trash2, UserCheck, UserX } from "lucide-react";
 
 import { ROLE_OPTIONS, selectClass } from "@/components/admin/add-user-dialog";
 import { TempPasswordNotice } from "@/components/admin/temp-password-notice";
@@ -12,13 +12,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from "@/components/ui/input";
 import { ROLES, type TargetCapabilities } from "@/lib/auth/permissions";
 import type { UserActionState } from "@/lib/auth/schemas";
-import { changeUserRole, deleteUser, getUsageBreakdown, resetUserPassword, setStorageLimit, setUserActive, type UsageBreakdown } from "@/lib/auth/user-actions";
+import { changeUserRole, deleteUser, getUsageBreakdown, resetUserPassword, setStorageLimit, setUserActive, updateUserDetails, type UsageBreakdown } from "@/lib/auth/user-actions";
 import type { AppRole } from "@/lib/supabase/database.types";
 import { formatBytes, usagePercent } from "@/lib/workspace/format";
 
 export type ManagedUser = {
   id: string;
+  /** Their name, or their email if none has been set. */
   name: string;
+  fullName: string | null;
   email: string;
   role: AppRole;
   active: boolean;
@@ -61,6 +63,35 @@ function Footer({ pending, label, destructive, onCancel }: { pending: boolean; l
         {pending && <Loader2 className="animate-spin" />} {label}
       </Button>
     </DialogFooter>
+  );
+}
+
+function EditDetails({ user, onDone }: Step) {
+  const [state, formAction, pending] = useActionState(async (prev: UserActionState, formData: FormData) => {
+    const result = await updateUserDetails(user.id, prev, formData);
+    if (result?.ok) onDone();
+    return result;
+  }, undefined);
+  const errors = state && !state.ok ? (state.fieldErrors ?? {}) : {};
+  const values = state && !state.ok ? (state.values ?? {}) : {};
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Edit details</DialogTitle>
+        <DialogDescription>The email is also what they sign in with, so tell them if you change it.</DialogDescription>
+      </DialogHeader>
+      <form action={formAction} noValidate className="space-y-4" aria-label="Edit details">
+        <ErrorNote state={state} />
+        <Field id="ed-name" label="Full name" error={errors.fullName?.[0]}>
+          <Input id="ed-name" name="fullName" autoComplete="off" defaultValue={values.fullName ?? user.fullName ?? ""} aria-invalid={!!errors.fullName} aria-describedby={describedBy("ed-name", errors.fullName?.[0])} />
+        </Field>
+        <Field id="ed-email" label="Email" error={errors.email?.[0]}>
+          <Input id="ed-email" name="email" type="email" autoComplete="off" defaultValue={values.email ?? user.email} aria-invalid={!!errors.email} aria-describedby={describedBy("ed-email", errors.email?.[0])} />
+        </Field>
+        <Footer pending={pending} label="Save changes" onCancel={onDone} />
+      </form>
+    </>
   );
 }
 
@@ -282,7 +313,7 @@ function Usage({ user, onDone }: Step) {
   );
 }
 
-const STEPS = { usage: Usage, quota: StorageLimit, role: ChangeRole, reset: ResetPassword, toggle: ToggleActive, delete: DeleteUser };
+const STEPS = { edit: EditDetails, usage: Usage, quota: StorageLimit, role: ChangeRole, reset: ResetPassword, toggle: ToggleActive, delete: DeleteUser };
 
 export function UserActionsMenu({ user, can }: { user: ManagedUser; can: TargetCapabilities }) {
   const [step, setStep] = useState<keyof typeof STEPS | null>(null);
@@ -299,6 +330,11 @@ export function UserActionsMenu({ user, can }: { user: ManagedUser; can: TargetC
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
+          {can.lifecycle && (
+            <DropdownMenuItem onSelect={() => setStep("edit")}>
+              <Pencil /> Edit details
+            </DropdownMenuItem>
+          )}
           {can.usage && (
             <DropdownMenuItem onSelect={() => setStep("usage")}>
               <HardDrive /> View storage

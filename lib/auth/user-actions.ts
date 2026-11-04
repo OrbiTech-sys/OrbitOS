@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { ROLES, canChangeRole, canManageUser, canResetPassword, canSetStorageLimit, canViewUsage, rolesActorCanAssign } from "@/lib/auth/permissions";
-import { addUserSchema, type UserActionState } from "@/lib/auth/schemas";
+import { addUserSchema, editUserSchema, type UserActionState } from "@/lib/auth/schemas";
 import { ROLE_LABELS, getCurrentUser, isAdminRole, type CurrentUser } from "@/lib/auth/session";
 import { generateTempPassword } from "@/lib/auth/temp-password";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -27,6 +27,7 @@ const fail = (error: string): UserActionState => ({ ok: false, error });
 async function currentActor() {
   const actor = await getCurrentUser();
   if (!actor) redirect("/sign-in?reason=session");
+  // rolesActorCanAssign and the capability checks refuse an account on a temporary password.
   return actor;
 }
 
@@ -49,8 +50,8 @@ async function audit(
   if (error) console.error(`audit_log insert failed for ${action}: ${error.message}`);
 }
 
-type Capability = "lifecycle" | "role" | "password" | "storageLimit";
-const CAN = { lifecycle: canManageUser, role: canChangeRole, password: canResetPassword, storageLimit: canSetStorageLimit } as const;
+type Capability = "lifecycle" | "details" | "role" | "password" | "storageLimit";
+const CAN = { lifecycle: canManageUser, details: canManageUser, role: canChangeRole, password: canResetPassword, storageLimit: canSetStorageLimit } as const;
 const DENIED = { ok: false, error: "You don't have permission to do that." } as const;
 
 /** Resolves the target of a manage action, or explains why the caller can't. */
@@ -58,7 +59,7 @@ async function authorizeManage(userId: unknown, capability: Capability) {
   const actor = await currentActor();
   const id = z.uuid().safeParse(userId);
   // Non-admins learn nothing about who exists.
-  if (!id.success || !actor.active || !isAdminRole(actor.role)) return DENIED;
+  if (!id.success || !actor.active || actor.mustChangePassword || !isAdminRole(actor.role)) return DENIED;
 
   const admin = createSupabaseAdminClient();
   const { data: target } = await admin
@@ -88,7 +89,8 @@ export async function addUser(_prev: UserActionState, formData: FormData): Promi
 
   const admin = createSupabaseAdminClient();
   const tempPassword = generateTempPassword();
-  const { data, error } = await admin.auth.admin.createUser({ email, password: tempPassword, email_confirm: true });
+  // The flag is what the database requires of every new account (it blocks public sign-up).
+  const { data, error } = await admin.auth.admin.createUser({ email, password: tempPassword, email_confirm: true, app_metadata: { created_by_admin: true } });
   if (error) {
     if (error.code === "email_exists" || error.code === "user_already_exists") {
       return { ok: false, values, fieldErrors: { email: ["An account with this email already exists"] } };
@@ -110,6 +112,38 @@ export async function addUser(_prev: UserActionState, formData: FormData): Promi
   await audit(admin, actor, "user.created", target, { role });
   refresh();
   return { ok: true, message: `${fullName} was added as ${ROLE_LABELS[role].toLowerCase()}.`, email, tempPassword };
+}
+
+/** Corrects a person's name or email. The email is also what they sign in with, so it changes everywhere at once. */
+export async function updateUserDetails(userId: string, _prev: UserActionState, formData: FormData): Promise<UserActionState> {
+  const auth = await authorizeManage(userId, "details");
+  if (!auth.ok) return fail(auth.error);
+  const { actor, admin, target } = auth;
+
+  const values = { fullName: String(formData.get("fullName") ?? ""), email: String(formData.get("email") ?? "") };
+  const parsed = editUserSchema.safeParse(values);
+  if (!parsed.success) return { ok: false, values, fieldErrors: z.flattenError(parsed.error).fieldErrors };
+  const { fullName, email } = parsed.data;
+
+  const emailChanged = email !== target.email.toLowerCase();
+  if (emailChanged) {
+    // Already confirmed: an administrator is vouching for it, and no mail service is set up.
+    // The on_auth_user_updated trigger copies the new address to the profile.
+    const { error } = await admin.auth.admin.updateUserById(target.id, { email, email_confirm: true });
+    if (error) {
+      if (error.code === "email_exists" || error.code === "user_already_exists") {
+        return { ok: false, values, fieldErrors: { email: ["An account with this email already exists"] } };
+      }
+      return { ok: false, values, error: "The changes couldn't be saved. Please try again." };
+    }
+  }
+
+  const { error } = await admin.from("profiles").update({ full_name: fullName }).eq("id", target.id);
+  if (error) return { ok: false, values, error: "The name couldn't be saved. Please try again." };
+
+  await audit(admin, actor, "user.details_changed", target, emailChanged ? { email_changed_to: email } : {});
+  refresh();
+  return { ok: true, message: `${fullName}'s details were saved.` };
 }
 
 export async function changeUserRole(userId: string, _prev: UserActionState, formData: FormData): Promise<UserActionState> {

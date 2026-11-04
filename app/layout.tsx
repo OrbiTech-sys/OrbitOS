@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { getSiteContent } from "@/lib/content/store";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,15 +14,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "OrbitOS — The AI-powered business operating system",
-    template: "%s · OrbitOS",
-  },
-  description:
-    "OrbitOS is a proof-of-concept for a simpler, modular business operating system: connect operations, automate repetitive work and see what needs attention from one workspace.",
-  applicationName: "OrbitOS",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { brand } = await getSiteContent();
+  return {
+    title: {
+      default: brand.tagline ? `${brand.productName} — ${brand.tagline}` : brand.productName,
+      template: `%s · ${brand.productName}`,
+    },
+    description: brand.description,
+    applicationName: brand.productName,
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#ffffff",

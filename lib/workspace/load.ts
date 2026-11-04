@@ -42,6 +42,7 @@ export async function loadWorkspace(user: CurrentUser): Promise<WorkspaceBootstr
       email: user.email,
       roleLabel: ROLE_LABELS[user.role],
       isAdmin: isAdminRole(user.role),
+      isSuperAdmin: user.role === "super_admin",
     },
   };
 }

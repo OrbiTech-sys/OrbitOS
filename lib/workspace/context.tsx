@@ -24,6 +24,7 @@ export interface WorkspaceProfile {
   email: string;
   roleLabel: string;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
 }
 
 export interface WorkspaceEnv {

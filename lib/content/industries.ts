@@ -1,18 +1,6 @@
-import type { IconName } from "@/components/shared/icon";
+import type { IndustryContent } from "./schema";
 
-export interface IndustryContent {
-  slug: string;
-  name: string;
-  icon: IconName;
-  summary: string;
-  useCases: { title: string; detail: string }[];
-  /** Module slugs from MODULES. */
-  modules: string[];
-  workflow: string[];
-  /** Honest status note shown with every industry. */
-  note: string;
-}
-
+/** The built-in industry pages. The super admin can change all of this under Settings → Website. */
 export const INDUSTRIES: IndustryContent[] = [
   {
     slug: "retail",
@@ -27,7 +15,8 @@ export const INDUSTRIES: IndustryContent[] = [
     ],
     modules: ["inventory", "sales", "finance", "analytics", "copilot"],
     workflow: ["Stock falls below threshold", "Reorder task created", "Supplier order received", "Stock adjusted"],
-    note: "Storefront and marketplace connectors are planned, not available. The demo uses a workplace-equipment catalog.",
+    note: "Storefront and marketplace connectors are planned, not available. The live demo uses a workplace-equipment catalog.",
+    visible: true,
   },
   {
     slug: "professional-services",
@@ -42,7 +31,8 @@ export const INDUSTRIES: IndustryContent[] = [
     ],
     modules: ["crm", "projects", "finance", "team", "copilot"],
     workflow: ["New client", "Project and tasks", "Work delivered", "Invoice issued"],
-    note: "Time tracking and retainer billing are not implemented in this proof of concept.",
+    note: "Time tracking and retainer billing are not available yet.",
+    visible: true,
   },
   {
     slug: "agencies",
@@ -58,6 +48,7 @@ export const INDUSTRIES: IndustryContent[] = [
     modules: ["crm", "sales", "projects", "finance", "automation"],
     workflow: ["Lead", "Proposal sent", "Project kicked off", "Invoice issued"],
     note: "A small agency can start with CRM, projects and invoicing and add modules later.",
+    visible: true,
   },
   {
     slug: "manufacturing",
@@ -73,12 +64,13 @@ export const INDUSTRIES: IndustryContent[] = [
     modules: ["inventory", "sales", "projects", "analytics", "integrations"],
     workflow: ["Customer order", "Check material stock", "Reorder task", "Delivery planned"],
     note: "Bills of materials, work orders and production scheduling are not implemented. Manufacturing-specific processes are on the roadmap.",
+    visible: true,
   },
   {
     slug: "wholesale",
     name: "Wholesale and distribution",
     icon: "truck",
-    summary: "Handle repeat buyers, large orders and many SKUs with stock-aware ordering. The demo workspace is a distributor.",
+    summary: "Handle repeat buyers, large orders and many SKUs with stock-aware ordering. The live demo is set up as a distributor.",
     useCases: [
       { title: "Stock-aware orders", detail: "Orders check available stock and reserve units when created." },
       { title: "Account terms", detail: "Invoice due dates follow payment terms; overdue accounts are flagged." },
@@ -88,6 +80,7 @@ export const INDUSTRIES: IndustryContent[] = [
     modules: ["inventory", "sales", "finance", "crm", "analytics"],
     workflow: ["Order placed", "Stock reserved", "Invoice issued", "Payment tracked"],
     note: "Multi-location warehousing and EDI are planned, not available.",
+    visible: true,
   },
   {
     slug: "saas",
@@ -103,7 +96,6 @@ export const INDUSTRIES: IndustryContent[] = [
     modules: ["crm", "projects", "analytics", "automation", "integrations"],
     workflow: ["Trial lead", "Qualified", "Proposal", "Customer onboarding"],
     note: "Subscription billing and product-usage data are not implemented; they would depend on integrations.",
+    visible: true,
   },
 ];
-
-export const INDUSTRY_BY_SLUG = Object.fromEntries(INDUSTRIES.map((i) => [i.slug, i])) as Record<string, IndustryContent>;
